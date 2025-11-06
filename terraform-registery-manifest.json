@@ -1,0 +1,25 @@
+{
+    "name": "finalSnapInst",
+    "flavor": "136277bd-1fa2-461a-9e11-b56124cfc65e",
+    "boot_uuid": "b1e330dd-ea7e-435f-9499-1e8ae3a2a5a3",
+    "delete_on_termination": true,
+    "network": [
+        "4731ecad-f310-4d4c-8f68-02bbd92d575b"
+    ],
+    "security_group": [
+        "bcc33c90-1a96-4cbf-88bd-cf933d21dd72"
+    ],
+    "source_type": "image",
+    "key": "sujal-test",
+    "availability_zone": "nova",
+    "billing_type": "hourly",
+    "volumes": [
+        {
+            "boot": true,
+            "volume_type": "NVMe based High IOPS Storage",
+            "size": 20,
+            "billing_type": "hourly"
+        }
+    ],
+    "count": 1
+}

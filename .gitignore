@@ -1,0 +1,46 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Build output directories
+bin/
+build/
+_build/
+
+# Terraform specific files
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+.terraform/
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+crash.log
+
+# Go vendor directory
+vendor/
+
+# IDE/editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Logs and temp files
+*.log
+*.tmp
+*.out
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+terraform
