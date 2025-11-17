@@ -12,11 +12,11 @@ import (
 func ResourceAceCloudVM() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceAceCloudVMCreate,
-		// Keep Read as a no-op for now (backend response doesn’t include details)
+
 		ReadContext:   resourceAceCloudVMRead,
 		UpdateContext: resourceAceCloudVMUpdate,
 		DeleteContext: resourceVMDelete,
-		// Only creation for now; omit Update/Delete
+
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:        schema.TypeString,
@@ -47,14 +47,14 @@ func ResourceAceCloudVM() *schema.Resource {
 					Type: schema.TypeString,
 				},
 			},
-            "key": {
-                Type:      schema.TypeString,
-                Required:  true,
-                Description: "SSH key for accessing the VM",
-                Elem: &schema.Schema{
-                    Type: schema.TypeString,
-                },
-            },
+			"key": {
+				Type:        schema.TypeString,
+				Required:    true,
+				Description: "SSH key for accessing the VM",
+				// Elem: &schema.Schema{
+				//     Type: schema.TypeString,
+				// },
+			},
 			"security_group": {
 				Type:        schema.TypeList,
 				Optional:    true,
@@ -149,7 +149,7 @@ func resourceAceCloudVMCreate(ctx context.Context, d *schema.ResourceData, meta 
 		SourceType:          d.Get("source_type").(string),
 		AvailabilityZone:    d.Get("availability_zone").(string),
 		BillingType:         d.Get("billing_type").(string),
-        Key:                 d.Get("key").(string),
+		Key:                 d.Get("key").(string),
 		Count:               d.Get("vm_count").(int),
 	}
 
@@ -200,15 +200,77 @@ func resourceAceCloudVMCreate(ctx context.Context, d *schema.ResourceData, meta 
 }
 
 func resourceAceCloudVMRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// No-op until a GET endpoint is available; keep state as-is.
+	c := meta.(*client.AceCloudClient)
+
+	id := d.Id()
+	resp, err := c.GetVM(ctx, id)
+	if err != nil {
+		if helpers.IsNotFoundError(err) {
+
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(err)
+	}
+
+
+	_ = d.Set("instance_id", resp.Data.ID)
+	_ = d.Set("status", resp.Data.Status)
+
+	// Set IP address if available (first public address)
+	if len(resp.Data.Addresses.Public) > 0 {
+		_ = d.Set("ip_address", resp.Data.Addresses.Public[0].Addr)
+	} else {
+		_ = d.Set("ip_address", "")
+	}
+
 	return nil
 }
 
 func resourceVMDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// No-op until a GET endpoint is available; keep state as-is.
+	c := meta.(*client.AceCloudClient)
+
+	id := d.Id()
+	if id == "" {
+		return nil
+	}
+
+
+	_, err := c.DeleteVMs(ctx, []string{id})
+	if err != nil {
+		if helpers.IsNotFoundError(err) {
+			d.SetId("")
+			return nil
+		}
+		return diag.FromErr(err)
+	}
+
+	d.SetId("")
 	return nil
 }
 func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// No-op until a GET endpoint is available; keep state as-is.
-	return nil
+	c := meta.(*client.AceCloudClient)
+
+	id := d.Id()
+	if id == "" {
+		return diag.Errorf("resource ID is empty")
+	}
+
+	if d.HasChange("name") {
+		name := d.Get("name").(string)
+		req := &client.VMUpdateRequest{
+			Name: name,
+		}
+
+		_, err := c.UpdateVM(ctx, id, req)
+		if err != nil {
+			if helpers.IsNotFoundError(err) {
+				d.SetId("")
+				return nil
+			}
+			return diag.FromErr(err)
+		}
+	}
+
+	return resourceAceCloudVMRead(ctx, d, meta)
 }

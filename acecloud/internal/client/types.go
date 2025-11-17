@@ -8,7 +8,7 @@ type VMCreateRequest struct {
 	Networks            []string        `json:"network,omitempty"`
 	SecurityGroups      []string        `json:"security_group,omitempty"`
 	SourceType          string          `json:"source_type"`
-	Key                 string 		    `json:"key"`		
+	Key                 string          `json:"key"`
 	AvailabilityZone    string          `json:"availability_zone"`
 	BillingType         string          `json:"billing_type"`
 	Volumes             []VolumeRequest `json:"volumes,omitempty"`
@@ -37,4 +37,48 @@ type ErrorResponse struct {
 
 type AvailabilityZone struct {
 	Name string `json:"name"`
+}
+
+
+type VMGetResponse struct {
+	Error   bool   `json:"error"`
+	Message string `json:"message"`
+	Data    struct {
+		Key              string `json:"key"`
+		ID               string `json:"id"`
+		Name             string `json:"name"`
+		Status           string `json:"status"`
+		AvailabilityZone string `json:"availability_zone"`
+		// Addresses: public/private
+		Addresses struct {
+			Public []struct {
+				Version int    `json:"version"`
+				Addr    string `json:"addr"`
+				MacAddr string `json:"mac_addr"`
+				Name    string `json:"name"`
+				Type    string `json:"type"`
+			} `json:"public"`
+			Private []interface{} `json:"private"`
+		} `json:"addresses"`
+	} `json:"data"`
+}
+
+
+type DeleteResponse struct {
+	Error   bool   `json:"error"`
+	Message string `json:"message"`
+}
+
+
+type VMUpdateRequest struct {
+	Name string `json:"name"`
+}
+
+type VMUpdateResponse struct {
+	Error   bool   `json:"error"`
+	Message string `json:"message"`
+	Data    struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"data"`
 }

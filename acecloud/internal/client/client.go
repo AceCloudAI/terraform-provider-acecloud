@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
 
-
 type AceCloudClient struct {
 	BaseURL    string
 	APIKey     string
@@ -35,15 +34,14 @@ func NewAceCloudClient(baseURL, apiKey, region, projectID string) *AceCloudClien
 	}
 }
 
-
 func (c *AceCloudClient) CreateVM(ctx context.Context, vmReq *VMCreateRequest) (*VMCreateResponse, error) {
 	endpoint := fmt.Sprintf("%s/cloud/instances", c.BaseURL)
 	tflog.Debug(ctx, fmt.Sprintf("Creating VM with endpoint: %s", endpoint))
-	
+
 	params := url.Values{}
 	params.Add("region", c.Region)
 	params.Add("project_id", c.ProjectID)
-	
+
 	fullURL := endpoint + "?" + params.Encode()
 
 	req, err := c.newRequest(ctx, "POST", fullURL, vmReq)
@@ -63,7 +61,94 @@ func (c *AceCloudClient) CreateVM(ctx context.Context, vmReq *VMCreateRequest) (
 	return &createResp, nil
 }
 
+func (c *AceCloudClient) GetVM(ctx context.Context, id string) (*VMGetResponse, error) {
+	endpoint := fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
+	tflog.Debug(ctx, fmt.Sprintf("Getting VM with endpoint: %s", endpoint))
 
+	params := url.Values{}
+	params.Add("region", c.Region)
+	params.Add("project_id", c.ProjectID)
+
+	fullURL := endpoint + "?" + params.Encode()
+
+	req, err := c.newRequest(ctx, "GET", fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	var getResp VMGetResponse
+	if err := c.doRequest(req, &getResp); err != nil {
+		return nil, fmt.Errorf("failed to get VM: %w", err)
+	}
+
+	if getResp.Error {
+		return nil, fmt.Errorf("API returned error: %s", getResp.Message)
+	}
+
+	return &getResp, nil
+}
+
+// DeleteVMs deletes one or more VMs by IDs using the bulk-delete endpoint.
+// The API expects a JSON body like: {"key":"id","values":["id1","id2"]}
+func (c *AceCloudClient) DeleteVMs(ctx context.Context, ids []string) (*DeleteResponse, error) {
+	endpoint := fmt.Sprintf("%s/cloud/instances", c.BaseURL)
+	tflog.Debug(ctx, fmt.Sprintf("Deleting VMs with endpoint: %s", endpoint))
+
+	params := url.Values{}
+	params.Add("region", c.Region)
+	params.Add("project_id", c.ProjectID)
+
+	fullURL := endpoint + "?" + params.Encode()
+
+	body := map[string]interface{}{
+		"key":    "id",
+		"values": ids,
+	}
+
+	req, err := c.newRequest(ctx, "DELETE", fullURL, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create delete request: %w", err)
+	}
+
+	var delResp DeleteResponse
+	if err := c.doRequest(req, &delResp); err != nil {
+		return nil, fmt.Errorf("failed to delete VMs: %w", err)
+	}
+
+	if delResp.Error {
+		return nil, fmt.Errorf("API returned error: %s", delResp.Message)
+	}
+
+	return &delResp, nil
+}
+
+// UpdateVM updates a VM's attributes (currently supports updating the name)
+func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface{}) (*VMUpdateResponse, error) {
+	endpoint := fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
+	tflog.Debug(ctx, fmt.Sprintf("Updating VM with endpoint: %s", endpoint))
+
+	params := url.Values{}
+	params.Add("region", c.Region)
+	params.Add("project_id", c.ProjectID)
+
+	fullURL := endpoint + "?" + params.Encode()
+
+	req, err := c.newRequest(ctx, "PUT", fullURL, body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create update request: %w", err)
+	}
+
+	var updResp VMUpdateResponse
+	if err := c.doRequest(req, &updResp); err != nil {
+		return nil, fmt.Errorf("failed to update VM: %w", err)
+	}
+
+	if updResp.Error {
+		return nil, fmt.Errorf("API returned error: %s", updResp.Message)
+	}
+
+	return &updResp, nil
+}
 
 func (c *AceCloudClient) newRequest(ctx context.Context, method, url string, body interface{}) (*http.Request, error) {
 	var buf io.Reader
@@ -84,17 +169,16 @@ func (c *AceCloudClient) newRequest(ctx context.Context, method, url string, bod
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-ace-api-key", c.APIKey)
 	req.Header.Set("x-api-key-service-name", "ace_vm")
-    dump, err := httputil.DumpRequestOut(req, true)
-    if err != nil {
-        tflog.Debug(ctx, fmt.Sprintf("Failed to dump request: %v", err))
-    } else {
-        tflog.Debug(ctx, "HTTP Request", map[string]interface{}{
-            "request": string(dump),
-        })
-    }
+	dump, err := httputil.DumpRequestOut(req, true)
+	if err != nil {
+		tflog.Debug(ctx, fmt.Sprintf("Failed to dump request: %v", err))
+	} else {
+		tflog.Debug(ctx, "HTTP Request", map[string]interface{}{
+			"request": string(dump),
+		})
+	}
 	return req, nil
 }
-
 
 func (c *AceCloudClient) doRequest(req *http.Request, v interface{}) error {
 	resp, err := c.HTTPClient.Do(req)
