@@ -1,4 +1,4 @@
-package client
+package types
 
 type VMCreateRequest struct {
 	Name                string          `json:"name"`
@@ -39,7 +39,6 @@ type AvailabilityZone struct {
 	Name string `json:"name"`
 }
 
-
 type VMGetResponse struct {
 	Error   bool   `json:"error"`
 	Message string `json:"message"`
@@ -63,12 +62,10 @@ type VMGetResponse struct {
 	} `json:"data"`
 }
 
-
 type DeleteResponse struct {
 	Error   bool   `json:"error"`
 	Message string `json:"message"`
 }
-
 
 type VMUpdateRequest struct {
 	Name string `json:"name"`

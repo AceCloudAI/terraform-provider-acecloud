@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"time"
+	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/client/types"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
 )
@@ -34,7 +35,7 @@ func NewAceCloudClient(baseURL, apiKey, region, projectID string) *AceCloudClien
 	}
 }
 
-func (c *AceCloudClient) CreateVM(ctx context.Context, vmReq *VMCreateRequest) (*VMCreateResponse, error) {
+func (c *AceCloudClient) CreateVM(ctx context.Context, vmReq *types.VMCreateRequest) (*types.VMCreateResponse, error) {
 	endpoint := fmt.Sprintf("%s/cloud/instances", c.BaseURL)
 	tflog.Debug(ctx, fmt.Sprintf("Creating VM with endpoint: %s", endpoint))
 
@@ -49,7 +50,7 @@ func (c *AceCloudClient) CreateVM(ctx context.Context, vmReq *VMCreateRequest) (
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	var createResp VMCreateResponse
+	var createResp types.VMCreateResponse
 	if err := c.doRequest(req, &createResp); err != nil {
 		return nil, fmt.Errorf("failed to create VM: %w", err)
 	}
@@ -61,7 +62,7 @@ func (c *AceCloudClient) CreateVM(ctx context.Context, vmReq *VMCreateRequest) (
 	return &createResp, nil
 }
 
-func (c *AceCloudClient) GetVM(ctx context.Context, id string) (*VMGetResponse, error) {
+func (c *AceCloudClient) GetVM(ctx context.Context, id string) (*types.VMGetResponse, error) {
 	endpoint := fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
 	tflog.Debug(ctx, fmt.Sprintf("Getting VM with endpoint: %s", endpoint))
 
@@ -76,7 +77,7 @@ func (c *AceCloudClient) GetVM(ctx context.Context, id string) (*VMGetResponse, 
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
-	var getResp VMGetResponse
+	var getResp types.VMGetResponse
 	if err := c.doRequest(req, &getResp); err != nil {
 		return nil, fmt.Errorf("failed to get VM: %w", err)
 	}
@@ -90,7 +91,7 @@ func (c *AceCloudClient) GetVM(ctx context.Context, id string) (*VMGetResponse, 
 
 // DeleteVMs deletes one or more VMs by IDs using the bulk-delete endpoint.
 // The API expects a JSON body like: {"key":"id","values":["id1","id2"]}
-func (c *AceCloudClient) DeleteVMs(ctx context.Context, ids []string) (*DeleteResponse, error) {
+func (c *AceCloudClient) DeleteVMs(ctx context.Context, ids []string) (*types.DeleteResponse, error) {
 	endpoint := fmt.Sprintf("%s/cloud/instances", c.BaseURL)
 	tflog.Debug(ctx, fmt.Sprintf("Deleting VMs with endpoint: %s", endpoint))
 
@@ -110,7 +111,7 @@ func (c *AceCloudClient) DeleteVMs(ctx context.Context, ids []string) (*DeleteRe
 		return nil, fmt.Errorf("failed to create delete request: %w", err)
 	}
 
-	var delResp DeleteResponse
+	var delResp types.DeleteResponse
 	if err := c.doRequest(req, &delResp); err != nil {
 		return nil, fmt.Errorf("failed to delete VMs: %w", err)
 	}
@@ -123,7 +124,7 @@ func (c *AceCloudClient) DeleteVMs(ctx context.Context, ids []string) (*DeleteRe
 }
 
 // UpdateVM updates a VM's attributes (currently supports updating the name)
-func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface{}) (*VMUpdateResponse, error) {
+func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface{}) (*types.VMUpdateResponse, error) {
 	endpoint := fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
 	tflog.Debug(ctx, fmt.Sprintf("Updating VM with endpoint: %s", endpoint))
 
@@ -138,7 +139,7 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface
 		return nil, fmt.Errorf("failed to create update request: %w", err)
 	}
 
-	var updResp VMUpdateResponse
+	var updResp types.VMUpdateResponse
 	if err := c.doRequest(req, &updResp); err != nil {
 		return nil, fmt.Errorf("failed to update VM: %w", err)
 	}
