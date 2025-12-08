@@ -7,6 +7,7 @@ import (
 	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/helpers"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/client/types"
 )
 
 func ResourceAceCloudVM() *schema.Resource {
@@ -81,6 +82,7 @@ func ResourceAceCloudVM() *schema.Resource {
 				Default:     "hourly",
 				Description: "Billing type for the VM",
 			},
+
 			"volumes": {
 				Type:        schema.TypeList,
 				Optional:    true,
@@ -141,7 +143,7 @@ func ResourceAceCloudVM() *schema.Resource {
 func resourceAceCloudVMCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c := meta.(*client.AceCloudClient)
 
-	req := &client.VMCreateRequest{
+	req := &types.VMCreateRequest{
 		Name:                d.Get("name").(string),
 		Flavor:              d.Get("flavor").(string),
 		BootUUID:            d.Get("boot_uuid").(string),
@@ -161,7 +163,7 @@ func resourceAceCloudVMCreate(ctx context.Context, d *schema.ResourceData, meta 
 	}
 	if v, ok := d.GetOk("volumes"); ok && v != nil {
 		raw := v.([]interface{})
-		vols := make([]client.VolumeRequest, 0, len(raw))
+		vols := make([]types.VolumeRequest, 0, len(raw))
 		for _, it := range raw {
 			m := it.(map[string]interface{})
 			size, _ := helpers.ConvertToInt(m["size"])
@@ -175,7 +177,7 @@ func resourceAceCloudVMCreate(ctx context.Context, d *schema.ResourceData, meta 
 			if bt, ok := m["billing_type"]; ok && bt != nil {
 				billing = bt.(string)
 			}
-			vols = append(vols, client.VolumeRequest{
+			vols = append(vols, types.VolumeRequest{
 				Boot:        boot,
 				VolumeType:  m["volume_type"].(string),
 				Size:        size,
@@ -258,7 +260,7 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 
 	if d.HasChange("name") {
 		name := d.Get("name").(string)
-		req := &client.VMUpdateRequest{
+		req := &types.VMUpdateRequest{
 			Name: name,
 		}
 
@@ -271,6 +273,7 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			return diag.FromErr(err)
 		}
 	}
+
 
 	return resourceAceCloudVMRead(ctx, d, meta)
 }
