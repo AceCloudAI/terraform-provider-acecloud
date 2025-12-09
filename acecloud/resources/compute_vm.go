@@ -8,6 +8,7 @@ import (
 	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/helpers"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
 func ResourceAceCloudVM() *schema.Resource {
@@ -83,8 +84,14 @@ func ResourceAceCloudVM() *schema.Resource {
 				Description: "Billing type for the VM",
 			},
 			"custom_update": {
-				Type:        schema.TypeString,
-				Optional:    true,
+				Type:     schema.TypeString,
+				Optional: true,
+				ValidateFunc: validation.StringInSlice([]string{
+					string(types.PauseInstance),
+					string(types.ResumeInstance),
+					string(types.SoftRebootInstance),
+					string(types.HardRebootInstance),
+				}, false),
 				Description: "Custom update action to perform on the VM (e.g., pause-instance, start-instance, etc.)",
 			},
 
@@ -281,10 +288,11 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 	}
 
 	if(d.HasChange("custom_update")){
-		action := d.Get("custom_update").(string)
+		action := types.VMupdateAction(d.Get("custom_update").(string))
+
 
 		switch action {
-			case "update:pause-instance":
+			case types.PauseInstance:
 				emptyBody := map[string]interface{}{} 
 				_, err := c.UpdateVM(ctx, id,emptyBody,action)
 				if err != nil {
@@ -295,7 +303,7 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 					return diag.FromErr(err)
 				}
 
-			case "update:resume-instance":
+			case types.ResumeInstance:
 				emptyBody := map[string]interface{}{} 
 				_, err := c.UpdateVM(ctx, id,emptyBody,action)
 				if err != nil {
@@ -306,7 +314,18 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 					return diag.FromErr(err)
 				}
 
-			case "update:soft-reboot-instance":
+			case types.SoftRebootInstance:
+				emptyBody := map[string]interface{}{} 
+				_, err := c.UpdateVM(ctx, id,emptyBody,action)
+				if err != nil {
+					if helpers.IsNotFoundError(err) {
+						d.SetId("")
+						return nil
+					}
+					return diag.FromErr(err)
+				}
+
+			case types.HardRebootInstance:
 				emptyBody := map[string]interface{}{} 
 				_, err := c.UpdateVM(ctx, id,emptyBody,action)
 				if err != nil {

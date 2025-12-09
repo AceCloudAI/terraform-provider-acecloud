@@ -32,6 +32,15 @@ type VMCreateResponse struct {
 	} `json:"data"`
 }
 
+type VMupdateAction string
+
+const (
+	PauseInstance      VMupdateAction = "update:pause-instance"
+	ResumeInstance     VMupdateAction = "update:resume-instance"
+	SoftRebootInstance VMupdateAction = "update:soft-reboot-instance"
+	HardRebootInstance VMupdateAction = "update:hard-reboot-instance"
+)
+
 type ErrorResponse struct {
 	Message    string `json:"message"`
 	StatusCode int    `json:"statusCode"`
@@ -71,7 +80,6 @@ type DeleteResponse struct {
 
 type VMUpdateRequest struct {
 	Name         string `json:"name"`
-	CustomUpdate string `json:"custom_update,omitempty"`
 }
 
 type VMUpdateResponse struct {

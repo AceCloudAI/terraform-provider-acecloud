@@ -126,20 +126,24 @@ func (c *AceCloudClient) DeleteVMs(ctx context.Context, ids []string) (*types.De
 
 // UpdateVM updates a VM's attributes (currently supports updating the name)
 func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface{},
- action string) (*types.VMUpdateResponse, error) {
+ action types.VMupdateAction) (*types.VMUpdateResponse, error) {
 	var endpoint string
 
 	switch action {
 		case "":
 			endpoint = fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
 
-		case "update:pause-instance":
+		case types.PauseInstance:
 			endpoint = fmt.Sprintf("%s/cloud/instances/%s/power", c.BaseURL, id)
 
-		case "update:resume-instance":
+		case types.ResumeInstance:
 			endpoint = fmt.Sprintf("%s/cloud/instances/%s/power", c.BaseURL, id)
 
-		case "update:soft-reboot-instance":
+		case types.SoftRebootInstance:
+			endpoint = fmt.Sprintf("%s/cloud/instances/%s/reboot", c.BaseURL, id)
+			tflog.Debug(ctx, fmt.Sprintf("reboot end %v", endpoint))
+
+		case types.HardRebootInstance:
 			endpoint = fmt.Sprintf("%s/cloud/instances/%s/reboot", c.BaseURL, id)
 
 	}
@@ -150,14 +154,19 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface
 	params.Add("project_id", c.ProjectID)
 
 	switch action {
-		case "update:pause-instance":
+		case types.PauseInstance:
 			params.Add("value", "OFF")
 
-		case "update:resume-instance":
+		case types.ResumeInstance:
 			params.Add("value", "ON")
 
-		case "update:soft-reboot-instance":
+		case types.SoftRebootInstance:
 			params.Add("value", "SOFT")
+			tflog.Debug(ctx, fmt.Sprintf("reboot end %v", endpoint))
+
+		case types.HardRebootInstance:
+			params.Add("value", "HARD")
+			tflog.Debug(ctx, fmt.Sprintf("reboot end %v", endpoint))
     }
 
 	fullURL := endpoint + "?" + params.Encode()
