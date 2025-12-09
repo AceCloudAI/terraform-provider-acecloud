@@ -139,6 +139,9 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface
 		case "update:resume-instance":
 			endpoint = fmt.Sprintf("%s/cloud/instances/%s/power", c.BaseURL, id)
 
+		case "update:soft-reboot-instance":
+			endpoint = fmt.Sprintf("%s/cloud/instances/%s/reboot", c.BaseURL, id)
+
 	}
 	tflog.Debug(ctx, fmt.Sprintf("Updating VM with endpoint: %s", endpoint))
 
@@ -152,6 +155,9 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface
 
 		case "update:resume-instance":
 			params.Add("value", "ON")
+
+		case "update:soft-reboot-instance":
+			params.Add("value", "SOFT")
     }
 
 	fullURL := endpoint + "?" + params.Encode()
