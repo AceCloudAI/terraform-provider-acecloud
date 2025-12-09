@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/client"
+	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/client/types"
 	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/helpers"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/client/types"
 )
 
 func ResourceAceCloudVM() *schema.Resource {
@@ -81,6 +81,11 @@ func ResourceAceCloudVM() *schema.Resource {
 				Optional:    true,
 				Default:     "hourly",
 				Description: "Billing type for the VM",
+			},
+			"custom_update": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Custom update action to perform on the VM (e.g., pause-instance, start-instance, etc.)",
 			},
 
 			"volumes": {
@@ -250,6 +255,7 @@ func resourceVMDelete(ctx context.Context, d *schema.ResourceData, meta interfac
 	d.SetId("")
 	return nil
 }
+
 func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c := meta.(*client.AceCloudClient)
 
@@ -264,7 +270,7 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			Name: name,
 		}
 
-		_, err := c.UpdateVM(ctx, id, req)
+		_, err := c.UpdateVM(ctx, id, req,"")
 		if err != nil {
 			if helpers.IsNotFoundError(err) {
 				d.SetId("")
@@ -274,6 +280,22 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 		}
 	}
 
+	if(d.HasChange("custom_update")){
+		action := d.Get("custom_update").(string)
+
+		switch action {
+			case "update:pause-instance":
+				emptyBody := map[string]interface{}{} 
+				_, err := c.UpdateVM(ctx, id,emptyBody,action)
+				if err != nil {
+					if helpers.IsNotFoundError(err) {
+						d.SetId("")
+						return nil
+					}
+					return diag.FromErr(err)
+				}
+		}
+	}
 
 	return resourceAceCloudVMRead(ctx, d, meta)
 }

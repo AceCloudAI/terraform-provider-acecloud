@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"time"
+
 	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/client/types"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -124,13 +125,28 @@ func (c *AceCloudClient) DeleteVMs(ctx context.Context, ids []string) (*types.De
 }
 
 // UpdateVM updates a VM's attributes (currently supports updating the name)
-func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface{}) (*types.VMUpdateResponse, error) {
-	endpoint := fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
+func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface{},
+ action string) (*types.VMUpdateResponse, error) {
+	var endpoint string
+
+	switch action {
+	case "":
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
+
+	case "update:pause-instance":
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/power", c.BaseURL, id)
+
+	}
 	tflog.Debug(ctx, fmt.Sprintf("Updating VM with endpoint: %s", endpoint))
 
 	params := url.Values{}
 	params.Add("region", c.Region)
 	params.Add("project_id", c.ProjectID)
+
+	switch action {
+		case "update:pause-instance":
+			params.Add("value", "OFF")
+    }
 
 	fullURL := endpoint + "?" + params.Encode()
 

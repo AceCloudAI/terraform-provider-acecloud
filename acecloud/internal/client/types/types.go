@@ -1,5 +1,7 @@
 package types
 
+import "encoding/json"
+
 type VMCreateRequest struct {
 	Name                string          `json:"name"`
 	Flavor              string          `json:"flavor"`
@@ -68,14 +70,12 @@ type DeleteResponse struct {
 }
 
 type VMUpdateRequest struct {
-	Name string `json:"name"`
+	Name         string `json:"name"`
+	CustomUpdate string `json:"custom_update,omitempty"`
 }
 
 type VMUpdateResponse struct {
 	Error   bool   `json:"error"`
 	Message string `json:"message"`
-	Data    struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	} `json:"data"`
+	Data    json.RawMessage
 }
