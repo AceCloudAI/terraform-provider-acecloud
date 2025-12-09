@@ -130,11 +130,14 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface
 	var endpoint string
 
 	switch action {
-	case "":
-		endpoint = fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
+		case "":
+			endpoint = fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
 
-	case "update:pause-instance":
-		endpoint = fmt.Sprintf("%s/cloud/instances/%s/power", c.BaseURL, id)
+		case "update:pause-instance":
+			endpoint = fmt.Sprintf("%s/cloud/instances/%s/power", c.BaseURL, id)
+
+		case "update:resume-instance":
+			endpoint = fmt.Sprintf("%s/cloud/instances/%s/power", c.BaseURL, id)
 
 	}
 	tflog.Debug(ctx, fmt.Sprintf("Updating VM with endpoint: %s", endpoint))
@@ -146,6 +149,9 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface
 	switch action {
 		case "update:pause-instance":
 			params.Add("value", "OFF")
+
+		case "update:resume-instance":
+			params.Add("value", "ON")
     }
 
 	fullURL := endpoint + "?" + params.Encode()

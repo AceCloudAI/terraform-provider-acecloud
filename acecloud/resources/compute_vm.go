@@ -294,6 +294,17 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 					}
 					return diag.FromErr(err)
 				}
+
+			case "update:resume-instance":
+				emptyBody := map[string]interface{}{} 
+				_, err := c.UpdateVM(ctx, id,emptyBody,action)
+				if err != nil {
+					if helpers.IsNotFoundError(err) {
+						d.SetId("")
+						return nil
+					}
+					return diag.FromErr(err)
+				}
 		}
 	}
 
