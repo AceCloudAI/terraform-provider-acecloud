@@ -10,6 +10,7 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"time"
+
 	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/client/types"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -183,8 +184,16 @@ func (c *AceCloudClient) newRequest(ctx context.Context, method, url string, bod
 
 func (c *AceCloudClient) doRequest(req *http.Request, v interface{}) error {
 	resp, err := c.HTTPClient.Do(req)
+	// bodyBytes, err := io.ReadAll(resp.Body)
+
+	if req.URL.Path == "/cloud/key-pairs" || req.Method == "POST" {
+		tflog.Debug(req.Context(), fmt.Sprintf("Received response  %v", resp))
+	}
+
 	if err != nil {
+		tflog.Debug(req.Context(), fmt.Sprintf("HTTP request failed: %v", err))
 		return fmt.Errorf("request failed: %w", err)
+
 	}
 	defer resp.Body.Close()
 
@@ -213,6 +222,103 @@ func (c *AceCloudClient) doRequest(req *http.Request, v interface{}) error {
 	if err := json.Unmarshal(body, v); err != nil {
 		return fmt.Errorf("failed to parse response: %w", err)
 	}
+
+	return nil
+}
+
+//////////////////////////////////////////////////////////////////////////
+//! key-pair related methods
+//////////////////////////////////////////////////////////////////////////
+
+// *Create key pair request
+func (c *AceCloudClient) CreateKeyPair(ctx context.Context, reqBody *types.KeyPairCreateRequest) (*types.KeyPairData, error) {
+	endpoint := fmt.Sprintf("%s/cloud/key-pairs", c.BaseURL)
+	tflog.Debug(ctx, fmt.Sprintf("Creating KeyPair with endpoint: %s", endpoint))
+
+	// Build query params from client defaults (Region/ProjectID)
+	params := url.Values{}
+	params.Add("region", c.Region)
+	params.Add("project_id", c.ProjectID)
+
+	fullURL := endpoint + "?" + params.Encode()
+
+	req, err := c.newRequest(ctx, "POST", fullURL, reqBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create keypair request: %w", err)
+	}
+
+	//*The API response shape is expected to be KeyPairResponse { data: KeyPairData }
+	var kpResp types.KeyPairResponse
+	if err := c.doRequest(req, &kpResp); err != nil {
+		return nil, fmt.Errorf("failed to create keypair: %w", err)
+	}
+
+	if kpResp.Error {
+		return nil, fmt.Errorf("API returned error: %s", kpResp.Message)
+	}
+	// tflog.Debug(ctx, fmt.Sprintf("Created KeyPair with ID: %v", kpResp.Data))
+	return &kpResp.Data, nil
+}
+
+// *GetKeyPair to retrieve a key-pair by id
+func (c *AceCloudClient) GetKeyPair(ctx context.Context, id string) (*types.KeyPairData, error) {
+	endpoint := fmt.Sprintf("%s/cloud/key-pairs/%s", c.BaseURL, url.PathEscape(id))
+	tflog.Debug(ctx, fmt.Sprintf("Getting KeyPair with endpoint: %s", endpoint))
+
+	params := url.Values{}
+	params.Add("region", c.Region)
+	params.Add("project_id", c.ProjectID)
+
+	fullURL := endpoint + "?" + params.Encode()
+
+	req, err := c.newRequest(ctx, "GET", fullURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create get keypair request: %w", err)
+	}
+
+	var kpResp types.KeyPairResponse
+	if err := c.doRequest(req, &kpResp); err != nil {
+
+		return nil, fmt.Errorf("failed to get keypair: %w", err)
+	}
+
+	if kpResp.Error {
+		// treat as not found if the API uses error flag and message; otherwise return error
+		return nil, fmt.Errorf("API returned error: %s", kpResp.Message)
+	}
+
+	return &kpResp.Data, nil
+}
+
+// DeleteKeyPair deletes a key-pair by id.
+func (c *AceCloudClient) DeleteKeyPair(ctx context.Context, reqBody *types.KeyPairDeleteRequest, id string) error {
+	endpoint := fmt.Sprintf("%s/cloud/key-pairs", c.BaseURL)
+	tflog.Debug(ctx, fmt.Sprintf("Deleting KeyPair with endpoint: %s", endpoint))
+
+	params := url.Values{}
+	params.Add("region", c.Region)
+	params.Add("project_id", c.ProjectID)
+
+	fullURL := endpoint + "?" + params.Encode()
+
+	tflog.Debug(ctx, fmt.Sprintf("Full URL for deleting KeyPair: %s", fullURL))
+
+	req, err := c.newRequest(ctx, "DELETE", fullURL, reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to create delete keypair request: %w", err)
+	}
+
+	tflog.Debug(req.Context(), fmt.Sprintf("Deleting KeyPair with ID: %s", reqBody.Values))
+
+	//*in case of we receive any deletion response
+	var delResp types.DeleteResponse
+	if err := c.doRequest(req, &delResp); err != nil {
+		return fmt.Errorf("failed to delete keypair: %w", err)
+	}
+
+	// if delResp.Error {
+	// 	return fmt.Errorf("API returned error: %s", delResp.Message)
+	// }
 
 	return nil
 }

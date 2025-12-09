@@ -54,6 +54,7 @@ func Provider() *schema.Provider {
 		},
 		ResourcesMap: map[string]*schema.Resource{
             "acecloud_vm": resources.ResourceAceCloudVM(),
+			"acecloud_keypair": resources.ResourceKeyPair(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
             // "acecloud_flavor": dataSourceAceCloudFlavor(),
