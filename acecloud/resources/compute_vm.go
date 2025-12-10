@@ -2,10 +2,12 @@ package resources
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/client"
 	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/client/types"
 	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/helpers"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -91,8 +93,15 @@ func ResourceAceCloudVM() *schema.Resource {
 					string(types.ResumeInstance),
 					string(types.SoftRebootInstance),
 					string(types.HardRebootInstance),
+					string(types.LockInstance),
+					string(types.UnlockInstance),
 				}, false),
 				Description: "Custom update action to perform on the VM (e.g., pause-instance, start-instance, etc.)",
+			},
+			"snapshot_name": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Description: "Name of the snapshot to create (required if custom_update is create-snapshot)",
 			},
 
 			"volumes": {
@@ -290,7 +299,7 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 	if(d.HasChange("custom_update")){
 		action := types.VMupdateAction(d.Get("custom_update").(string))
 
-
+		tflog.Debug(ctx,fmt.Sprintf( "Action given : %v" , action))
 		switch action {
 			case types.PauseInstance:
 				emptyBody := map[string]interface{}{} 
@@ -326,6 +335,28 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 				}
 
 			case types.HardRebootInstance:
+				emptyBody := map[string]interface{}{} 
+				_, err := c.UpdateVM(ctx, id,emptyBody,action)
+				if err != nil {
+					if helpers.IsNotFoundError(err) {
+						d.SetId("")
+						return nil
+					}
+					return diag.FromErr(err)
+				}
+
+			case types.LockInstance:
+				emptyBody := map[string]interface{}{} 
+				_, err := c.UpdateVM(ctx, id,emptyBody,action)
+				if err != nil {
+					if helpers.IsNotFoundError(err) {
+						d.SetId("")
+						return nil
+					}
+					return diag.FromErr(err)
+				}
+
+			case types.UnlockInstance:
 				emptyBody := map[string]interface{}{} 
 				_, err := c.UpdateVM(ctx, id,emptyBody,action)
 				if err != nil {

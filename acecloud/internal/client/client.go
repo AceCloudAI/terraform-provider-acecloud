@@ -128,7 +128,7 @@ func (c *AceCloudClient) DeleteVMs(ctx context.Context, ids []string) (*types.De
 func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface{},
  action types.VMupdateAction) (*types.VMUpdateResponse, error) {
 	var endpoint string
-
+	tflog.Debug(ctx, fmt.Sprintf("Preparing to update action : %v", action))
 	switch action {
 		case "":
 			endpoint = fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
@@ -141,11 +141,15 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface
 
 		case types.SoftRebootInstance:
 			endpoint = fmt.Sprintf("%s/cloud/instances/%s/reboot", c.BaseURL, id)
-			tflog.Debug(ctx, fmt.Sprintf("reboot end %v", endpoint))
 
 		case types.HardRebootInstance:
 			endpoint = fmt.Sprintf("%s/cloud/instances/%s/reboot", c.BaseURL, id)
 
+		case types.LockInstance:
+			endpoint = fmt.Sprintf("%s/cloud/instances/%s/lock", c.BaseURL, id)
+
+		case types.UnlockInstance:
+			endpoint = fmt.Sprintf("%s/cloud/instances/%s/lock", c.BaseURL, id)
 	}
 	tflog.Debug(ctx, fmt.Sprintf("Updating VM with endpoint: %s", endpoint))
 
@@ -162,11 +166,15 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface
 
 		case types.SoftRebootInstance:
 			params.Add("value", "SOFT")
-			tflog.Debug(ctx, fmt.Sprintf("reboot end %v", endpoint))
 
 		case types.HardRebootInstance:
 			params.Add("value", "HARD")
-			tflog.Debug(ctx, fmt.Sprintf("reboot end %v", endpoint))
+
+		case types.LockInstance:
+			params.Add("value", "ON")
+
+		case types.UnlockInstance:
+			params.Add("value", "OFF")
     }
 
 	fullURL := endpoint + "?" + params.Encode()

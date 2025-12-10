@@ -35,10 +35,12 @@ type VMCreateResponse struct {
 type VMupdateAction string
 
 const (
-	PauseInstance      VMupdateAction = "update:pause-instance"
-	ResumeInstance     VMupdateAction = "update:resume-instance"
-	SoftRebootInstance VMupdateAction = "update:soft-reboot-instance"
-	HardRebootInstance VMupdateAction = "update:hard-reboot-instance"
+	PauseInstance      VMupdateAction = "pause-instance"
+	ResumeInstance     VMupdateAction = "resume-instance"
+	SoftRebootInstance VMupdateAction = "soft-reboot-instance"
+	HardRebootInstance VMupdateAction = "hard-reboot-instance"
+	LockInstance VMupdateAction = "lock-instance"
+	UnlockInstance VMupdateAction = "unlock-instance"
 )
 
 type ErrorResponse struct {
