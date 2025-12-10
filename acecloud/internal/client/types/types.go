@@ -39,8 +39,9 @@ const (
 	ResumeInstance     VMupdateAction = "resume-instance"
 	SoftRebootInstance VMupdateAction = "soft-reboot-instance"
 	HardRebootInstance VMupdateAction = "hard-reboot-instance"
-	LockInstance VMupdateAction = "lock-instance"
-	UnlockInstance VMupdateAction = "unlock-instance"
+	LockInstance       VMupdateAction = "lock-instance"
+	UnlockInstance     VMupdateAction = "unlock-instance"
+	CreateSnapshot     VMupdateAction = "create-snapshot"
 )
 
 type ErrorResponse struct {
@@ -81,7 +82,8 @@ type DeleteResponse struct {
 }
 
 type VMUpdateRequest struct {
-	Name         string `json:"name"`
+	Name        string `json:"name"`
+	BillingType string `json:"billing_type,omitempty"`
 }
 
 type VMUpdateResponse struct {

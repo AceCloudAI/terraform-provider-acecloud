@@ -86,22 +86,32 @@ func ResourceAceCloudVM() *schema.Resource {
 				Description: "Billing type for the VM",
 			},
 			"custom_update": {
-				Type:     schema.TypeString,
+				Type:     schema.TypeList,
 				Optional: true,
-				ValidateFunc: validation.StringInSlice([]string{
-					string(types.PauseInstance),
-					string(types.ResumeInstance),
-					string(types.SoftRebootInstance),
-					string(types.HardRebootInstance),
-					string(types.LockInstance),
-					string(types.UnlockInstance),
-				}, false),
-				Description: "Custom update action to perform on the VM (e.g., pause-instance, start-instance, etc.)",
-			},
-			"snapshot_name": {
-				Type:        schema.TypeString,
-				Optional:    true,
-				Description: "Name of the snapshot to create (required if custom_update is create-snapshot)",
+				MaxItems: 1,
+				Elem: &schema.Resource{
+					Schema: map[string]*schema.Schema{
+						"action": {
+							Type:     schema.TypeString,
+							Required: true,
+							ValidateFunc: validation.StringInSlice([]string{
+								string(types.PauseInstance),
+								string(types.ResumeInstance),
+								string(types.SoftRebootInstance),
+								string(types.HardRebootInstance),
+								string(types.LockInstance),
+								string(types.UnlockInstance),
+								string(types.CreateSnapshot),
+							}, false),
+							Description: "The action to update something on the VM instance",
+						},
+						"snapshot_name": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Name of the snapshot to create (required if custom_update is create-snapshot)",
+						},
+					},
+				},
 			},
 
 			"volumes": {
@@ -236,7 +246,6 @@ func resourceAceCloudVMRead(ctx context.Context, d *schema.ResourceData, meta in
 		return diag.FromErr(err)
 	}
 
-
 	_ = d.Set("instance_id", resp.Data.ID)
 	_ = d.Set("status", resp.Data.Status)
 
@@ -257,7 +266,6 @@ func resourceVMDelete(ctx context.Context, d *schema.ResourceData, meta interfac
 	if id == "" {
 		return nil
 	}
-
 
 	_, err := c.DeleteVMs(ctx, []string{id})
 	if err != nil {
@@ -286,7 +294,7 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			Name: name,
 		}
 
-		_, err := c.UpdateVM(ctx, id, req,"")
+		_, err := c.UpdateVM(ctx, id, req, "")
 		if err != nil {
 			if helpers.IsNotFoundError(err) {
 				d.SetId("")
@@ -295,79 +303,80 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			return diag.FromErr(err)
 		}
 	}
+	if d.HasChange("custom_update") {
 
-	if(d.HasChange("custom_update")){
-		action := types.VMupdateAction(d.Get("custom_update").(string))
-
-		tflog.Debug(ctx,fmt.Sprintf( "Action given : %v" , action))
-		switch action {
-			case types.PauseInstance:
-				emptyBody := map[string]interface{}{} 
-				_, err := c.UpdateVM(ctx, id,emptyBody,action)
-				if err != nil {
-					if helpers.IsNotFoundError(err) {
-						d.SetId("")
-						return nil
-					}
-					return diag.FromErr(err)
-				}
-
-			case types.ResumeInstance:
-				emptyBody := map[string]interface{}{} 
-				_, err := c.UpdateVM(ctx, id,emptyBody,action)
-				if err != nil {
-					if helpers.IsNotFoundError(err) {
-						d.SetId("")
-						return nil
-					}
-					return diag.FromErr(err)
-				}
-
-			case types.SoftRebootInstance:
-				emptyBody := map[string]interface{}{} 
-				_, err := c.UpdateVM(ctx, id,emptyBody,action)
-				if err != nil {
-					if helpers.IsNotFoundError(err) {
-						d.SetId("")
-						return nil
-					}
-					return diag.FromErr(err)
-				}
-
-			case types.HardRebootInstance:
-				emptyBody := map[string]interface{}{} 
-				_, err := c.UpdateVM(ctx, id,emptyBody,action)
-				if err != nil {
-					if helpers.IsNotFoundError(err) {
-						d.SetId("")
-						return nil
-					}
-					return diag.FromErr(err)
-				}
-
-			case types.LockInstance:
-				emptyBody := map[string]interface{}{} 
-				_, err := c.UpdateVM(ctx, id,emptyBody,action)
-				if err != nil {
-					if helpers.IsNotFoundError(err) {
-						d.SetId("")
-						return nil
-					}
-					return diag.FromErr(err)
-				}
-
-			case types.UnlockInstance:
-				emptyBody := map[string]interface{}{} 
-				_, err := c.UpdateVM(ctx, id,emptyBody,action)
-				if err != nil {
-					if helpers.IsNotFoundError(err) {
-						d.SetId("")
-						return nil
-					}
-					return diag.FromErr(err)
-				}
+		updates := d.Get("custom_update").([]interface{})
+		if len(updates) == 0 {
+			return nil
 		}
 
+		updateBlock := updates[0].(map[string]interface{})
+
+		rawAction := updateBlock["action"].(string)
+		action := types.VMupdateAction(rawAction)
+
+		tflog.Debug(ctx, fmt.Sprintf("Action: %s", action))
+
+		switch action {
+
+		case types.PauseInstance,
+			types.ResumeInstance,
+			types.SoftRebootInstance,
+			types.HardRebootInstance,
+			types.LockInstance,
+			types.UnlockInstance:
+
+			emptyBody := map[string]interface{}{}
+			_, err := c.UpdateVM(ctx, id, emptyBody, action)
+			if err != nil {
+				if helpers.IsNotFoundError(err) {
+					d.SetId("")
+					return nil
+				}
+				return diag.FromErr(err)
+			}
+		case types.CreateSnapshot:
+			snapshotName := ""
+			if v, ok := updateBlock["snapshot_name"]; ok {
+				snapshotName = v.(string)
+			}
+
+			if snapshotName == "" {
+				return diag.Errorf("snapshot_name is required when action=create-snapshot")
+			}
+
+			// Extract billing type from boot volume
+			var billingType string
+			vols := d.Get("volumes").([]interface{})
+			for _, v := range vols {
+				vol := v.(map[string]interface{})
+				if vol["boot"].(bool) {
+					billingType = vol["billing_type"].(string)
+					break
+				}
+			}
+
+			if billingType == "" {
+				billingType = "hourly" // fallback if needed
+			}
+
+			req := &types.VMUpdateRequest{
+				Name:        snapshotName,
+				BillingType: billingType,
+			}
+
+			tflog.Debug(ctx, fmt.Sprintf("Creating snapshot '%s' with billing_type '%s'", snapshotName, billingType))
+
+			_, err := c.UpdateVM(ctx, id, req, action)
+			if err != nil {
+				if helpers.IsNotFoundError(err) {
+					d.SetId("")
+					return nil
+				}
+				return diag.FromErr(err)
+			}
+
+		}
 	}
 
 	return resourceAceCloudVMRead(ctx, d, meta)

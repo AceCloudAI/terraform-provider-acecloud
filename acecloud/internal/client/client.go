@@ -126,30 +126,25 @@ func (c *AceCloudClient) DeleteVMs(ctx context.Context, ids []string) (*types.De
 
 // UpdateVM updates a VM's attributes (currently supports updating the name)
 func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface{},
- action types.VMupdateAction) (*types.VMUpdateResponse, error) {
+	action types.VMupdateAction) (*types.VMUpdateResponse, error) {
 	var endpoint string
 	tflog.Debug(ctx, fmt.Sprintf("Preparing to update action : %v", action))
 	switch action {
-		case "":
-			endpoint = fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
+	case "":
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
 
-		case types.PauseInstance:
-			endpoint = fmt.Sprintf("%s/cloud/instances/%s/power", c.BaseURL, id)
+	case types.PauseInstance, types.ResumeInstance:
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/power", c.BaseURL, id)
 
-		case types.ResumeInstance:
-			endpoint = fmt.Sprintf("%s/cloud/instances/%s/power", c.BaseURL, id)
+	case types.SoftRebootInstance, types.HardRebootInstance:
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/reboot", c.BaseURL, id)
 
-		case types.SoftRebootInstance:
-			endpoint = fmt.Sprintf("%s/cloud/instances/%s/reboot", c.BaseURL, id)
+	case types.LockInstance, types.UnlockInstance:
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/lock", c.BaseURL, id)
 
-		case types.HardRebootInstance:
-			endpoint = fmt.Sprintf("%s/cloud/instances/%s/reboot", c.BaseURL, id)
-
-		case types.LockInstance:
-			endpoint = fmt.Sprintf("%s/cloud/instances/%s/lock", c.BaseURL, id)
-
-		case types.UnlockInstance:
-			endpoint = fmt.Sprintf("%s/cloud/instances/%s/lock", c.BaseURL, id)
+	case types.CreateSnapshot:
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/snapshot", c.BaseURL, id)
+		tflog.Debug(ctx, fmt.Sprintf("Endpoint inside switchcase : %v", endpoint))
 	}
 	tflog.Debug(ctx, fmt.Sprintf("Updating VM with endpoint: %s", endpoint))
 
@@ -158,27 +153,28 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface
 	params.Add("project_id", c.ProjectID)
 
 	switch action {
-		case types.PauseInstance:
-			params.Add("value", "OFF")
+	case types.PauseInstance:
+		params.Add("value", "OFF")
 
-		case types.ResumeInstance:
-			params.Add("value", "ON")
+	case types.ResumeInstance:
+		params.Add("value", "ON")
 
-		case types.SoftRebootInstance:
-			params.Add("value", "SOFT")
+	case types.SoftRebootInstance:
+		params.Add("value", "SOFT")
 
-		case types.HardRebootInstance:
-			params.Add("value", "HARD")
+	case types.HardRebootInstance:
+		params.Add("value", "HARD")
 
-		case types.LockInstance:
-			params.Add("value", "ON")
+	case types.LockInstance:
+		params.Add("value", "ON")
 
-		case types.UnlockInstance:
-			params.Add("value", "OFF")
-    }
+	case types.UnlockInstance:
+		params.Add("value", "OFF")
+	}
 
 	fullURL := endpoint + "?" + params.Encode()
 
+	tflog.Debug(ctx, fmt.Sprintf("Action body : %v", body))
 	req, err := c.newRequest(ctx, "PUT", fullURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create update request: %w", err)
