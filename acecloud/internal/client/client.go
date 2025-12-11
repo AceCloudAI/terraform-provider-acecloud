@@ -181,6 +181,12 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, d *schema.ResourceData, i
 		}
 		endpoint = fmt.Sprintf("%s/cloud/instances/%s/detach-volume/%s", c.BaseURL, id, volume_id)
 
+	case types.ShutOffInstance, types.StartInstance:
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/shutoff", c.BaseURL, id)
+
+	case types.RebuildInstance:
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/rebuild", c.BaseURL, id)
+
 	}
 
 	params := url.Values{}
@@ -188,10 +194,10 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, d *schema.ResourceData, i
 	params.Add("project_id", c.ProjectID)
 
 	switch action {
-	case types.PauseInstance:
+	case types.PauseInstance, types.ShutOffInstance, types.UnlockInstance, types.UnsuspendInstance:
 		params.Add("value", "OFF")
 
-	case types.ResumeInstance:
+	case types.ResumeInstance, types.StartInstance, types.LockInstance, types.SuspendInstance:
 		params.Add("value", "ON")
 
 	case types.SoftRebootInstance:
@@ -200,25 +206,15 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, d *schema.ResourceData, i
 	case types.HardRebootInstance:
 		params.Add("value", "HARD")
 
-	case types.LockInstance:
-		params.Add("value", "ON")
-
-	case types.UnlockInstance:
-		params.Add("value", "OFF")
-
 	case types.AttachInterface:
 		params.Add("type", "network")
 
-	case types.SuspendInstance:
-		params.Add("value", "ON")
-
-	case types.UnsuspendInstance:
-		params.Add("value", "OFF")
 	}
 
 	fullURL := endpoint + "?" + params.Encode()
 
 	tflog.Debug(ctx, fmt.Sprintf("Action body : %v", body))
+	tflog.Debug(ctx, fmt.Sprintf("Start Instance : %v", fullURL))
 	req, err := c.newRequest(ctx, "PUT", fullURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create update request: %w", err)

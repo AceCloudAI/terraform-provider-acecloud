@@ -48,6 +48,9 @@ const (
 	UnsuspendInstance  VMupdateAction = "unsuspend-instance"
 	AttachVolume       VMupdateAction = "attach-volume"
 	DetachVolume       VMupdateAction = "detach-volume"
+	ShutOffInstance    VMupdateAction = "shutoff-instance"
+	StartInstance      VMupdateAction = "start-instance"
+	RebuildInstance    VMupdateAction = "rebuild-instance"
 )
 
 type ErrorResponse struct {
@@ -93,6 +96,9 @@ type VMUpdateRequest struct {
 	NetworkId           string `json:"network_id,omitempty"`
 	VolumeId            string `json:"volume_id,omitempty"`
 	DeleteOnTermination bool   `json:"delete_on_termination,omitempty"`
+	DiskConfig          string `json:"disk_config,omitempty"`
+	ImageId             string `json:"image_id,omitempty"`
+	Description         string `json:"description,omitempty"`
 }
 
 type VMUpdateResponse struct {

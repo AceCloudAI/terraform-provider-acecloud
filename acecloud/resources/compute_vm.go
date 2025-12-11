@@ -108,6 +108,9 @@ func ResourceAceCloudVM() *schema.Resource {
 								string(types.UnsuspendInstance),
 								string(types.AttachVolume),
 								string(types.DetachVolume),
+								string(types.ShutOffInstance),
+								string(types.StartInstance),
+								string(types.RebuildInstance),
 							}, false),
 							Description: "The action to update something on the VM instance",
 						},
@@ -139,6 +142,23 @@ func ResourceAceCloudVM() *schema.Resource {
 							Optional:    true,
 							Default:     false,
 							Description: "Whether to delete the volume on VM termination. (used with attach-volume action)",
+						},
+						"disk_config": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Disk configuration for rebuilding the instance. (used with rebuild-instance action)",
+						},
+
+						"description": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Description for the VM instance. (used with rebuild-instance action)",
+						},
+
+						"image_id": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Image id that will be rebuilt (used with rebuild-instance action) ",
 						},
 					},
 				},
@@ -358,8 +378,9 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			types.DetachInterface,
 			types.SuspendInstance,
 			types.UnsuspendInstance,
-			types.DetachVolume:
-
+			types.DetachVolume,
+			types.ShutOffInstance,
+			types.StartInstance:
 			emptyBody := map[string]interface{}{}
 			_, err := c.UpdateVM(ctx, d, id, emptyBody, action)
 			if err != nil {
@@ -454,7 +475,7 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 
 		case types.AttachVolume:
 			vID, ok1 := updateBlock["volume_id"]
-			if !ok1 {
+			if !ok1 || vID == "" {
 				return diag.Errorf("volume_id is required when action = attach-volume")
 			}
 			volumeId := vID.(string)
@@ -471,6 +492,41 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			}
 
 			_, err := c.UpdateVM(ctx, d, id, req, action)
+			if err != nil {
+				if helpers.IsNotFoundError(err) {
+					d.SetId("")
+					return nil
+				}
+				return diag.FromErr(err)
+			}
+
+		case types.RebuildInstance:
+			diskConfig, ok := updateBlock["disk_config"].(string)
+			if !ok || diskConfig == "" {
+				return diag.Errorf("disk_config is required for rebuild-instance")
+			}
+
+			imageId, ok := updateBlock["image_id"].(string)
+			if !ok || imageId == "" {
+				return diag.Errorf("image_id is required for rebuild-instance")
+			}
+
+			description := ""
+			if v, ok := updateBlock["description"]; ok {
+				description = v.(string)
+			}
+
+			body := map[string]interface{}{
+				"disk_config": diskConfig,
+				"image_id":    imageId,
+			}
+
+			// only include description if user provided it
+			if description != "" {
+				body["description"] = description
+			}
+
+			_, err := c.UpdateVM(ctx, d, id, body, action)
 			if err != nil {
 				if helpers.IsNotFoundError(err) {
 					d.SetId("")
