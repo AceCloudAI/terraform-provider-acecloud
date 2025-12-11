@@ -14,6 +14,7 @@ import (
 	"github.com/AceCloudAI/terraform-provider-acecloud/acecloud/internal/client/types"
 
 	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 type AceCloudClient struct {
@@ -125,10 +126,14 @@ func (c *AceCloudClient) DeleteVMs(ctx context.Context, ids []string) (*types.De
 }
 
 // UpdateVM updates a VM's attributes (currently supports updating the name)
-func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface{},
+func (c *AceCloudClient) UpdateVM(ctx context.Context, d *schema.ResourceData, id string, body interface{},
 	action types.VMupdateAction) (*types.VMUpdateResponse, error) {
 	var endpoint string
 	tflog.Debug(ctx, fmt.Sprintf("Preparing to update action : %v", action))
+
+	updates := d.Get("custom_update").([]interface{})
+	updateBlock := updates[0].(map[string]interface{})
+
 	switch action {
 	case "":
 		endpoint = fmt.Sprintf("%s/cloud/instances/%s", c.BaseURL, id)
@@ -144,9 +149,18 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, id string, body interface
 
 	case types.CreateSnapshot:
 		endpoint = fmt.Sprintf("%s/cloud/instances/%s/snapshot", c.BaseURL, id)
-		tflog.Debug(ctx, fmt.Sprintf("Endpoint inside switchcase : %v", endpoint))
+
+	case types.DetachInterface:
+		interfaceID := ""
+		if v, ok := updateBlock["interface_id"]; ok {
+			interfaceID = v.(string)
+		}
+
+		if interfaceID == "" {
+			return nil, fmt.Errorf("interface_id is required for detach-interface action")
+		}
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/detach-interface/%s", c.BaseURL, id, interfaceID)
 	}
-	tflog.Debug(ctx, fmt.Sprintf("Updating VM with endpoint: %s", endpoint))
 
 	params := url.Values{}
 	params.Add("region", c.Region)

@@ -102,6 +102,7 @@ func ResourceAceCloudVM() *schema.Resource {
 								string(types.LockInstance),
 								string(types.UnlockInstance),
 								string(types.CreateSnapshot),
+								string(types.DetachInterface),
 							}, false),
 							Description: "The action to update something on the VM instance",
 						},
@@ -109,6 +110,11 @@ func ResourceAceCloudVM() *schema.Resource {
 							Type:        schema.TypeString,
 							Optional:    true,
 							Description: "Name of the snapshot to create (required if custom_update is create-snapshot)",
+						},
+						"interface_id": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "The specific interface ID to remove from the VM. Detaches the selected NIC from the instance.",
 						},
 					},
 				},
@@ -294,7 +300,7 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			Name: name,
 		}
 
-		_, err := c.UpdateVM(ctx, id, req, "")
+		_, err := c.UpdateVM(ctx, d, id, req, "")
 		if err != nil {
 			if helpers.IsNotFoundError(err) {
 				d.SetId("")
@@ -324,10 +330,11 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			types.SoftRebootInstance,
 			types.HardRebootInstance,
 			types.LockInstance,
-			types.UnlockInstance:
+			types.UnlockInstance,
+			types.DetachInterface:
 
 			emptyBody := map[string]interface{}{}
-			_, err := c.UpdateVM(ctx, id, emptyBody, action)
+			_, err := c.UpdateVM(ctx, d, id, emptyBody, action)
 			if err != nil {
 				if helpers.IsNotFoundError(err) {
 					d.SetId("")
@@ -335,6 +342,7 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 				}
 				return diag.FromErr(err)
 			}
+
 		case types.CreateSnapshot:
 			snapshotName := ""
 			if v, ok := updateBlock["snapshot_name"]; ok {
@@ -367,7 +375,7 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 
 			tflog.Debug(ctx, fmt.Sprintf("Creating snapshot '%s' with billing_type '%s'", snapshotName, billingType))
 
-			_, err := c.UpdateVM(ctx, id, req, action)
+			_, err := c.UpdateVM(ctx, d, id, req, action)
 			if err != nil {
 				if helpers.IsNotFoundError(err) {
 					d.SetId("")

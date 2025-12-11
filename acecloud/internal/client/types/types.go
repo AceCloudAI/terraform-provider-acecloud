@@ -42,6 +42,7 @@ const (
 	LockInstance       VMupdateAction = "lock-instance"
 	UnlockInstance     VMupdateAction = "unlock-instance"
 	CreateSnapshot     VMupdateAction = "create-snapshot"
+	DetachInterface    VMupdateAction = "detach-interface"
 )
 
 type ErrorResponse struct {
