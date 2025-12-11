@@ -160,6 +160,17 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, d *schema.ResourceData, i
 			return nil, fmt.Errorf("interface_id is required for detach-interface action")
 		}
 		endpoint = fmt.Sprintf("%s/cloud/instances/%s/detach-interface/%s", c.BaseURL, id, interfaceID)
+
+	case types.AttachInterface:
+		networkID := ""
+		if v, ok := updateBlock["network_id"]; ok {
+			networkID = v.(string)
+		}
+		if networkID == "" {
+			return nil, fmt.Errorf("network_id is required for attach-interface action")
+		}
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/attach-interface", c.BaseURL, id)
+
 	}
 
 	params := url.Values{}
@@ -184,6 +195,9 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, d *schema.ResourceData, i
 
 	case types.UnlockInstance:
 		params.Add("value", "OFF")
+
+	case types.AttachInterface:
+		params.Add("type", "network")
 	}
 
 	fullURL := endpoint + "?" + params.Encode()

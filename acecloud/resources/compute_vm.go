@@ -103,6 +103,7 @@ func ResourceAceCloudVM() *schema.Resource {
 								string(types.UnlockInstance),
 								string(types.CreateSnapshot),
 								string(types.DetachInterface),
+								string(types.AttachInterface),
 							}, false),
 							Description: "The action to update something on the VM instance",
 						},
@@ -114,7 +115,13 @@ func ResourceAceCloudVM() *schema.Resource {
 						"interface_id": {
 							Type:        schema.TypeString,
 							Optional:    true,
-							Description: "The specific interface ID to remove from the VM. Detaches the selected NIC from the instance.",
+							Description: "The specific interface ID to remove from the VM. Detaches the selected NIC from the instance.(required if custom_update is detach-interface)",
+						},
+
+						"network_id": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: "Network ID to attach the interface to the VM. Attaches a new NIC to the instance. (required if custom_update is attach-interface)",
 						},
 					},
 				},
@@ -374,6 +381,47 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			}
 
 			tflog.Debug(ctx, fmt.Sprintf("Creating snapshot '%s' with billing_type '%s'", snapshotName, billingType))
+
+			_, err := c.UpdateVM(ctx, d, id, req, action)
+			if err != nil {
+				if helpers.IsNotFoundError(err) {
+					d.SetId("")
+					return nil
+				}
+				return diag.FromErr(err)
+			}
+
+		case types.AttachInterface:
+			networkId := ""
+			if v, ok := updateBlock["network_id"]; ok {
+				networkId = v.(string)
+			}
+
+			if networkId == "" {
+				return diag.Errorf("network_id is required when action = attach-interface")
+			}
+
+			// Extract billing type from boot volume
+			var billingType string
+			vols := d.Get("volumes").([]interface{})
+			tflog.Debug(ctx, fmt.Sprintf("Volume array'%s'", vols))
+
+			for _, v := range vols {
+				vol := v.(map[string]interface{})
+				if vol["boot"].(bool) {
+					billingType = vol["billing_type"].(string)
+					break
+				}
+			}
+
+			if billingType == "" {
+				billingType = "hourly" // fallback if needed
+			}
+
+			req := &types.VMUpdateRequest{
+				NetworkId:   networkId,
+				BillingType: billingType,
+			}
 
 			_, err := c.UpdateVM(ctx, d, id, req, action)
 			if err != nil {

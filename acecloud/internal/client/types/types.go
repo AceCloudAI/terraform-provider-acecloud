@@ -43,6 +43,7 @@ const (
 	UnlockInstance     VMupdateAction = "unlock-instance"
 	CreateSnapshot     VMupdateAction = "create-snapshot"
 	DetachInterface    VMupdateAction = "detach-interface"
+	AttachInterface    VMupdateAction = "attach-interface"
 )
 
 type ErrorResponse struct {
@@ -85,6 +86,7 @@ type DeleteResponse struct {
 type VMUpdateRequest struct {
 	Name        string `json:"name"`
 	BillingType string `json:"billing_type,omitempty"`
+	NetworkId   string `json:"network_id,omitempty"`
 }
 
 type VMUpdateResponse struct {
