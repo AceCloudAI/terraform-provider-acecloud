@@ -44,6 +44,8 @@ const (
 	CreateSnapshot     VMupdateAction = "create-snapshot"
 	DetachInterface    VMupdateAction = "detach-interface"
 	AttachInterface    VMupdateAction = "attach-interface"
+	SuspendInstance    VMupdateAction = "suspend-instance"
+	UnsuspendInstance  VMupdateAction = "unsuspend-instance"
 )
 
 type ErrorResponse struct {

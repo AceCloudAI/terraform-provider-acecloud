@@ -104,6 +104,8 @@ func ResourceAceCloudVM() *schema.Resource {
 								string(types.CreateSnapshot),
 								string(types.DetachInterface),
 								string(types.AttachInterface),
+								string(types.SuspendInstance),
+								string(types.UnsuspendInstance),
 							}, false),
 							Description: "The action to update something on the VM instance",
 						},
@@ -338,7 +340,9 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			types.HardRebootInstance,
 			types.LockInstance,
 			types.UnlockInstance,
-			types.DetachInterface:
+			types.DetachInterface,
+			types.SuspendInstance,
+			types.UnsuspendInstance:
 
 			emptyBody := map[string]interface{}{}
 			_, err := c.UpdateVM(ctx, d, id, emptyBody, action)

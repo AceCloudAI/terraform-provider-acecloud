@@ -171,6 +171,9 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, d *schema.ResourceData, i
 		}
 		endpoint = fmt.Sprintf("%s/cloud/instances/%s/attach-interface", c.BaseURL, id)
 
+	case types.SuspendInstance, types.UnsuspendInstance:
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/suspend", c.BaseURL, id)
+
 	}
 
 	params := url.Values{}
@@ -198,6 +201,12 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, d *schema.ResourceData, i
 
 	case types.AttachInterface:
 		params.Add("type", "network")
+
+	case types.SuspendInstance:
+		params.Add("value", "ON")
+
+	case types.UnsuspendInstance:
+		params.Add("value", "OFF")
 	}
 
 	fullURL := endpoint + "?" + params.Encode()
