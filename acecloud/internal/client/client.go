@@ -162,17 +162,24 @@ func (c *AceCloudClient) UpdateVM(ctx context.Context, d *schema.ResourceData, i
 		endpoint = fmt.Sprintf("%s/cloud/instances/%s/detach-interface/%s", c.BaseURL, id, interfaceID)
 
 	case types.AttachInterface:
-		networkID := ""
-		if v, ok := updateBlock["network_id"]; ok {
-			networkID = v.(string)
-		}
-		if networkID == "" {
-			return nil, fmt.Errorf("network_id is required for attach-interface action")
-		}
 		endpoint = fmt.Sprintf("%s/cloud/instances/%s/attach-interface", c.BaseURL, id)
 
 	case types.SuspendInstance, types.UnsuspendInstance:
 		endpoint = fmt.Sprintf("%s/cloud/instances/%s/suspend", c.BaseURL, id)
+
+	case types.AttachVolume:
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/attach-volume", c.BaseURL, id)
+
+	case types.DetachVolume:
+		volume_id := ""
+		if v, ok := updateBlock["volume_id"]; ok {
+			volume_id = v.(string)
+		}
+
+		if volume_id == "" {
+			return nil, fmt.Errorf("volume_id is required for detach-volume action")
+		}
+		endpoint = fmt.Sprintf("%s/cloud/instances/%s/detach-volume/%s", c.BaseURL, id, volume_id)
 
 	}
 

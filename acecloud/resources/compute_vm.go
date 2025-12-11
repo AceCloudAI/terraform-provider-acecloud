@@ -106,6 +106,8 @@ func ResourceAceCloudVM() *schema.Resource {
 								string(types.AttachInterface),
 								string(types.SuspendInstance),
 								string(types.UnsuspendInstance),
+								string(types.AttachVolume),
+								string(types.DetachVolume),
 							}, false),
 							Description: "The action to update something on the VM instance",
 						},
@@ -124,6 +126,19 @@ func ResourceAceCloudVM() *schema.Resource {
 							Type:        schema.TypeString,
 							Optional:    true,
 							Description: "Network ID to attach the interface to the VM. Attaches a new NIC to the instance. (required if custom_update is attach-interface)",
+						},
+
+						"volume_id": {
+							Type:        schema.TypeString,
+							Optional:    true,
+							Description: " Volume ID to attach to the VM. Attaches a new volume to the instance. (required if custom_update is attach-volume)",
+						},
+
+						"delete_on_termination": {
+							Type:        schema.TypeBool,
+							Optional:    true,
+							Default:     false,
+							Description: "Whether to delete the volume on VM termination. (used with attach-volume action)",
 						},
 					},
 				},
@@ -342,7 +357,8 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			types.UnlockInstance,
 			types.DetachInterface,
 			types.SuspendInstance,
-			types.UnsuspendInstance:
+			types.UnsuspendInstance,
+			types.DetachVolume:
 
 			emptyBody := map[string]interface{}{}
 			_, err := c.UpdateVM(ctx, d, id, emptyBody, action)
@@ -425,6 +441,33 @@ func resourceAceCloudVMUpdate(ctx context.Context, d *schema.ResourceData, meta 
 			req := &types.VMUpdateRequest{
 				NetworkId:   networkId,
 				BillingType: billingType,
+			}
+
+			_, err := c.UpdateVM(ctx, d, id, req, action)
+			if err != nil {
+				if helpers.IsNotFoundError(err) {
+					d.SetId("")
+					return nil
+				}
+				return diag.FromErr(err)
+			}
+
+		case types.AttachVolume:
+			vID, ok1 := updateBlock["volume_id"]
+			if !ok1 {
+				return diag.Errorf("volume_id is required when action = attach-volume")
+			}
+			volumeId := vID.(string)
+
+			dotVal, ok2 := updateBlock["delete_on_termination"]
+			if !ok2 {
+				return diag.Errorf("delete_on_termination is required when action = attach-volume")
+			}
+			deleteOnTermination := dotVal.(bool)
+
+			req := &types.VMUpdateRequest{
+				VolumeId:            volumeId,
+				DeleteOnTermination: deleteOnTermination,
 			}
 
 			_, err := c.UpdateVM(ctx, d, id, req, action)

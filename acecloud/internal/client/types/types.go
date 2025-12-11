@@ -46,6 +46,8 @@ const (
 	AttachInterface    VMupdateAction = "attach-interface"
 	SuspendInstance    VMupdateAction = "suspend-instance"
 	UnsuspendInstance  VMupdateAction = "unsuspend-instance"
+	AttachVolume       VMupdateAction = "attach-volume"
+	DetachVolume       VMupdateAction = "detach-volume"
 )
 
 type ErrorResponse struct {
@@ -86,9 +88,11 @@ type DeleteResponse struct {
 }
 
 type VMUpdateRequest struct {
-	Name        string `json:"name"`
-	BillingType string `json:"billing_type,omitempty"`
-	NetworkId   string `json:"network_id,omitempty"`
+	Name                string `json:"name"`
+	BillingType         string `json:"billing_type,omitempty"`
+	NetworkId           string `json:"network_id,omitempty"`
+	VolumeId            string `json:"volume_id,omitempty"`
+	DeleteOnTermination bool   `json:"delete_on_termination,omitempty"`
 }
 
 type VMUpdateResponse struct {
