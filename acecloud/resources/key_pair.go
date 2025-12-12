@@ -11,7 +11,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
-// ResourceKeyPair returns the Terraform resource for managing key-pairs.
+// * ResourceKeyPair returns the Terraform resource for managing key-pairs.
 func ResourceKeyPair() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceKeyPairCreate,
@@ -32,10 +32,10 @@ func ResourceKeyPair() *schema.Resource {
 				Description: "Public key string (if provided or returned)",
 			},
 			"private_key": {
-				Type:     schema.TypeString,
-				Optional: true,
-				Computed: true,
-				// Sensitive:   true,
+				Type:        schema.TypeString,
+				Optional:    true,
+				Computed:    true,
+				Sensitive:   true,
 				Description: "Private key returned at creation (sensitive)",
 			},
 			"fingerprint": {
@@ -76,20 +76,17 @@ func resourceKeyPairCreate(ctx context.Context, d *schema.ResourceData, meta int
 	_ = d.Set("fingerprint", kp.Fingerprint)
 	_ = d.Set("type", kp.Type)
 
-	// Refresh state using Read
+	return resourceKeyPairRead(ctx, d, meta)
 
-	// return resourceKeyPairRead(ctx, d, meta)
-	return nil
 }
 
 func resourceKeyPairRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	c := meta.(*client.AceCloudClient)
 
-	// Read identifying info from state/config
+	//*Read identifying info from state/config
 
 	id := d.Id()
 	if id == "" {
-		// nothing to do
 		return nil
 	}
 
@@ -98,19 +95,16 @@ func resourceKeyPairRead(ctx context.Context, d *schema.ResourceData, meta inter
 		return diag.FromErr(err)
 	}
 	if kp == nil {
-		// Remote resource missing -> remove from state
+		//*Remote resource missing -> remove from state
 		d.SetId("")
 		return nil
 	}
 
-	// Update state with remote values
+	//*Update state with remote values
 	_ = d.Set("name", kp.Name)
 	_ = d.Set("public_key", kp.PublicKey)
 	_ = d.Set("private_key", kp.PrivateKey)
 	_ = d.Set("fingerprint", kp.Fingerprint)
-
-	// Best practice: do not persist private key on subsequent reads unless API returns it.
-	// _ = d.Set("private_key", "")
 
 	return nil
 }
@@ -124,14 +118,13 @@ func resourceKeyPairDelete(ctx context.Context, d *schema.ResourceData, meta int
 	}
 
 	//*Building delete request from schema
-
 	req := types.KeyPairDeleteRequestFromIDs()
 	if v, ok := d.GetOk("name"); ok {
 		req.Values = append(req.Values, v.(string))
 	}
 
 	if err := c.DeleteKeyPair(ctx, req, id); err != nil {
-		// If already deleted on backend, treat as success and remove from state
+		//?If already deleted on backend, treat as success and remove from state
 		if helpers.IsNotFoundError(err) {
 			d.SetId("")
 			return nil
@@ -144,7 +137,6 @@ func resourceKeyPairDelete(ctx context.Context, d *schema.ResourceData, meta int
 }
 
 func resourceKeyPairUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
-	// Key pairs are typically immutable; no update operation is supported.
-	// To change a key pair, it must be deleted and recreated.
-	return resourceKeyPairRead(ctx, d, meta)
+	//*we create a new key-pair on update
+	return resourceKeyPairCreate(ctx, d, meta)
 }
