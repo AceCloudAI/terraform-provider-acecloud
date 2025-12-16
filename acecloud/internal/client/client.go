@@ -170,7 +170,7 @@ func (c *AceCloudClient) newRequest(ctx context.Context, method, url string, bod
 	// Set headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-ace-api-key", c.APIKey)
-	req.Header.Set("x-api-key-service-name", "ace_vm")
+	req.Header.Set("x-api-key-service-name", "acecloud_keypair")
 	dump, err := httputil.DumpRequestOut(req, true)
 	if err != nil {
 		tflog.Debug(ctx, fmt.Sprintf("Failed to dump request: %v", err))
