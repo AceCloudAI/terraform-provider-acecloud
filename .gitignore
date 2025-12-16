@@ -44,3 +44,4 @@ vendor/
 Thumbs.db
 
 terraform
+terraform-provider-acecloud_v*
