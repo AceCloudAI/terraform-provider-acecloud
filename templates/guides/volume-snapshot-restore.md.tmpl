@@ -41,7 +41,7 @@ resource "acecloud_volume" "restored_data" {
   name         = "restored-data"
   description  = "Volume restored from snapshot"
   size         = 50
-  volume_type  = "ssd"
+  volume_type  = "NVMe based High IOPS Storage"
   billing_type = "hourly"
   snapshot_id  = acecloud_snapshot.data.id
 }

@@ -39,7 +39,7 @@ resource "acecloud_volume" "restored" {
   name         = "restored-from-backup"
   description  = "Volume restored from the weekly backup"
   size         = 100
-  volume_type  = "ssd"
+  volume_type  = "NVMe based High IOPS Storage"
   billing_type = "hourly"
   backup_id    = acecloud_volume_backup.weekly.id
 }

@@ -87,7 +87,7 @@ resource "acecloud_auto_scaling_template" "web" {
   name                   = "web-tier-template"
   type                   = "linux"
   description            = "Web tier launch template"
-  volume_type            = "ssd"
+  volume_type            = "NVMe based High IOPS Storage"
   volume_size            = 40
   vol_del_on_termination = true
   flavor_id              = local.flavor_id

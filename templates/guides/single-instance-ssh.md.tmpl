@@ -108,7 +108,7 @@ resource "acecloud_instance" "demo" {
   volumes {
     size         = 20
     boot         = true
-    volume_type  = "ssd"
+    volume_type  = "NVMe based High IOPS Storage"
     billing_type = "hourly"
   }
 
