@@ -16,8 +16,6 @@ Components:
 
 The load balancer can be created and managed by the auto-scaling deployment itself (set `is_integrated_with_lb = true` and provide `lb_data`), or referenced as an existing LB. This guide uses the integrated variant — simpler and the common case.
 
-> Auto-scaling deployment provisioning is asynchronous. The first instance typically takes several minutes to reach `ACTIVE`; Terraform polls until the deployment reports ready.
-
 ## Complete example
 
 ```hcl
