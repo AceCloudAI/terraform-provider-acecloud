@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,19 @@ import (
 	"strings"
 	"time"
 )
+
+// ErrNotFound is returned by Get/Delete/Post/Put when the API responds with
+// HTTP 404. Resource Read paths can detect this with errors.Is and call
+// resp.State.RemoveResource(ctx) so Terraform reconciles the missing object
+// as drift rather than surfacing a hard error.
+var ErrNotFound = errors.New("resource not found")
+
+// IsNotFound reports whether err (or any error it wraps) is the sentinel
+// ErrNotFound, i.e. the API returned HTTP 404. Use this in resource Read
+// paths to gracefully handle out-of-band deletions.
+func IsNotFound(err error) bool {
+	return errors.Is(err, ErrNotFound)
+}
 
 // Pre-compiled regex used to collapse runs of whitespace produced by the
 // JSON-error flattener.
@@ -378,6 +392,20 @@ func (c *Client) DoRequest(ctx context.Context, method, path string, body interf
 				return nil, fmt.Errorf("authentication failed (401): %s", sanitizeErrorMessage(apiResp.Message))
 			}
 			return nil, fmt.Errorf("authentication failed (401)")
+		}
+
+		// On 404, return a sentinel-wrapped error so callers (Read paths) can
+		// detect it via errors.Is(err, client.ErrNotFound) and gracefully
+		// remove the resource from state instead of surfacing a hard error.
+		// Without this, customers who delete a resource via the console see
+		// "Failed to read X" on the next plan instead of clean drift detection.
+		if resp.StatusCode == http.StatusNotFound {
+			var apiResp APIResponse
+			if err := json.Unmarshal(respBody, &apiResp); err == nil {
+				apiResp.parseMessage()
+				return nil, fmt.Errorf("%w: %s", ErrNotFound, sanitizeErrorMessage(apiResp.Message))
+			}
+			return nil, ErrNotFound
 		}
 
 		// DEBUG: log request and response with sensitive field redaction

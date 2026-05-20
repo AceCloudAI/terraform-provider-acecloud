@@ -1,6 +1,5 @@
 ---
 page_title: "Auto-scaling pool"
-subcategory: "Auto Scaling"
 description: |-
   Create an auto-scaling pool with a launch template, CPU-driven scaling rules, and an integrated load balancer.
 ---

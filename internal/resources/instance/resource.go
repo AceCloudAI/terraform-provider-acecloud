@@ -20,8 +20,9 @@ const defaultAvailabilityZone = "nova"
 
 // Ensure the implementation satisfies the resource interfaces.
 var (
-	_ resource.Resource              = &instanceResource{}
-	_ resource.ResourceWithConfigure = &instanceResource{}
+	_ resource.Resource               = &instanceResource{}
+	_ resource.ResourceWithConfigure  = &instanceResource{}
+	_ resource.ResourceWithModifyPlan = &instanceResource{}
 )
 
 // instanceResource is the resource implementation.
@@ -336,6 +337,10 @@ func (r *instanceResource) Read(ctx context.Context, req resource.ReadRequest, r
 
 	apiResp, err := r.client.Get(ctx, fmt.Sprintf("/cloud/instances/%s", id), nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError(
 			"Failed to read instance",
 			fmt.Sprintf("Could not read instance %s: %s", id, err),
@@ -624,6 +629,7 @@ func (r *instanceResource) Delete(ctx context.Context, req resource.DeleteReques
 			return err
 		},
 		RetryableErrors: []string{"Cannot perform this action", "in current state", "PENDING_"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError(

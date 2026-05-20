@@ -1,6 +1,5 @@
 ---
 page_title: "Multi-region and multi-project setups"
-subcategory: "Advanced Usage"
 description: |-
   Patterns for managing AceCloud infrastructure across multiple regions and projects using Terraform provider aliases.
 ---

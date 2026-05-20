@@ -173,6 +173,10 @@ func (r *snapshotResource) Read(ctx context.Context, req resource.ReadRequest, r
 		"with": `["volume"]`,
 	})
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read snapshot", err.Error())
 		return
 	}
@@ -258,6 +262,7 @@ func (r *snapshotResource) Delete(ctx context.Context, req resource.DeleteReques
 			return err
 		},
 		RetryableErrors: []string{"in use", "status must be available", "already using"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete snapshot", err.Error())

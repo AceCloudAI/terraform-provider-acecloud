@@ -1,6 +1,5 @@
 ---
 page_title: "Volume snapshot and restore"
-subcategory: "Storage"
 description: |-
   Take a point-in-time snapshot of a volume, then restore from it by creating a new volume from the snapshot ID.
 ---

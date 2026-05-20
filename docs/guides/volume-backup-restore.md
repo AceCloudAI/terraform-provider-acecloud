@@ -1,6 +1,5 @@
 ---
 page_title: "Volume backup and restore"
-subcategory: "Storage"
 description: |-
   Create a durable backup of a volume, then restore by creating a new volume from the backup ID.
 ---
