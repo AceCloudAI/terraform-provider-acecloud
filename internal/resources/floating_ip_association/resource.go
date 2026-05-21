@@ -3,6 +3,7 @@ package floating_ip_association
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/AceCloudAI/terraform-provider-acecloud/internal/client"
 	"github.com/AceCloudAI/terraform-provider-acecloud/internal/wait"
@@ -81,7 +82,10 @@ func (r *floatingIPAssociationResource) Create(ctx context.Context, req resource
 		"type": "attach",
 	})
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to associate floating IP", err.Error())
+		summary, detail := classifyAssociateError(err,
+			plan.FloatingIPAddress.ValueString(),
+			plan.InstanceID.ValueString())
+		resp.Diagnostics.AddError(summary, detail)
 		return
 	}
 
@@ -137,9 +141,71 @@ func (r *floatingIPAssociationResource) Delete(ctx context.Context, req resource
 			return err
 		},
 		RetryableErrors: []string{"Cannot perform this action", "in current state"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
-		resp.Diagnostics.AddError("Failed to disassociate floating IP", err.Error())
+		summary, detail := classifyDisassociateError(err,
+			state.FloatingIPAddress.ValueString(),
+			state.InstanceID.ValueString())
+		resp.Diagnostics.AddError(summary, detail)
 		return
+	}
+}
+
+// classifyAssociateError maps known attach-time API error patterns to
+// actionable messages with a remediation hint. The original API error
+// text is preserved in the detail block so support can still triage.
+func classifyAssociateError(err error, fipAddr, instanceID string) (summary, detail string) {
+	if err == nil {
+		return "", ""
+	}
+	msg := err.Error()
+	lower := strings.ToLower(msg)
+	switch {
+	case strings.Contains(lower, "already associated"),
+		strings.Contains(lower, "already attached"),
+		strings.Contains(lower, "already has a floating ip"):
+		return "Floating IP is already associated",
+			fmt.Sprintf("The floating IP %s appears to already be associated, possibly to instance %s "+
+				"or another instance, via an out-of-band change (console or API). "+
+				"Run `terraform refresh` so state matches reality, then re-plan. "+
+				"Underlying API error: %s", fipAddr, instanceID, msg)
+	case strings.Contains(lower, "not found"):
+		return "Floating IP or instance not found",
+			fmt.Sprintf("Either floating IP %s or instance %s no longer exists. "+
+				"This usually means the resource was deleted via the console. "+
+				"Run `terraform refresh` to reconcile state. Underlying API error: %s",
+				fipAddr, instanceID, msg)
+	default:
+		return "Failed to associate floating IP", msg
+	}
+}
+
+// classifyDisassociateError is the symmetric helper for detach-time
+// failures. Out-of-band disassociation is by far the most common cause
+// and deserves a clear remediation hint.
+func classifyDisassociateError(err error, fipAddr, instanceID string) (summary, detail string) {
+	if err == nil {
+		return "", ""
+	}
+	msg := err.Error()
+	lower := strings.ToLower(msg)
+	switch {
+	case strings.Contains(lower, "not associated"),
+		strings.Contains(lower, "not attached"),
+		strings.Contains(lower, "no floating ip"):
+		return "Floating IP is already disassociated",
+			fmt.Sprintf("The floating IP %s is no longer associated with instance %s "+
+				"(probably detached via the console or API). "+
+				"Run `terraform state rm` on the affected association resource to drop it from state, "+
+				"or `terraform refresh` to let Terraform detect the drift. "+
+				"Underlying API error: %s", fipAddr, instanceID, msg)
+	case strings.Contains(lower, "not found"):
+		return "Floating IP or instance not found",
+			fmt.Sprintf("Either floating IP %s or instance %s no longer exists. "+
+				"Treat the association as already removed by running `terraform state rm` on it. "+
+				"Underlying API error: %s", fipAddr, instanceID, msg)
+	default:
+		return "Failed to disassociate floating IP", msg
 	}
 }

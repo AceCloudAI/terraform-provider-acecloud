@@ -22,8 +22,8 @@ import (
 const (
 	DefaultStatusTimeout  = 5 * time.Minute  // WaitForStatus
 	DefaultStatusInterval = 5 * time.Second  // WaitForStatus poll interval
-	DefaultRetryTimeout   = 2 * time.Minute  // RetryOnConflict
-	DefaultRetryInterval  = 10 * time.Second // RetryOnConflict retry interval
+	DefaultRetryTimeout   = 2 * time.Minute  // RetryOnConflict — 8 attempts × 15s budget
+	DefaultRetryInterval  = 15 * time.Second // RetryOnConflict retry interval (post-backoff)
 	DefaultPollTimeout    = 2 * time.Minute  // PollForResource
 	DefaultPollInterval   = 5 * time.Second  // PollForResource poll interval
 )
@@ -102,22 +102,34 @@ func WaitForStatus(ctx context.Context, opts WaitForStatusOpts) (*StatusResult, 
 // of the default transient substrings ("immutable", "PENDING_", "Please try
 // again", "in use", "SecurityGroupInUse"), or custom substrings passed via
 // RetryableErrors.
+//
+// When RetryAuthErrors is set (intended for Delete paths), the helper also
+// retries transient auth-related errors ("401", "Unauthorized", "Unable to
+// process this request") that can surface during concurrent destroys.
+//
+// The first 3 attempts are quick probes (1s, 3s, 7s) that recover fast from
+// brief transient blips. Subsequent attempts use the configured interval
+// (default 15s) so we don't flood the platform if the issue persists.
 func RetryOnConflict(ctx context.Context, opts RetryOnConflictOpts) error {
 	timeout := opts.Timeout
 	if timeout == 0 {
 		timeout = DefaultRetryTimeout
 	}
-	interval := opts.Interval
-	if interval == 0 {
-		interval = DefaultRetryInterval
+	baseInterval := opts.Interval
+	if baseInterval == 0 {
+		baseInterval = DefaultRetryInterval
 	}
 
 	retryable := opts.RetryableErrors
 	if len(retryable) == 0 {
 		retryable = defaultRetryableErrors
 	}
+	if opts.RetryAuthErrors {
+		retryable = append(retryable, authRetryableErrors...)
+	}
 
 	deadline := time.After(timeout)
+	attempt := 0
 	for {
 		err := opts.Operation(ctx)
 		if err == nil {
@@ -128,12 +140,15 @@ func RetryOnConflict(ctx context.Context, opts RetryOnConflictOpts) error {
 			return err
 		}
 
+		attempt++
+		wait := backoffInterval(attempt, baseInterval)
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-deadline:
 			return fmt.Errorf("timed out retrying operation: %w", err)
-		case <-time.After(interval):
+		case <-time.After(wait):
 			// next attempt
 		}
 	}
@@ -143,8 +158,9 @@ func RetryOnConflict(ctx context.Context, opts RetryOnConflictOpts) error {
 type RetryOnConflictOpts struct {
 	Operation       func(ctx context.Context) error // Required: the operation to retry
 	Timeout         time.Duration                   // Overall timeout (0 = DefaultRetryTimeout)
-	Interval        time.Duration                   // Interval between retries (0 = DefaultRetryInterval)
+	Interval        time.Duration                   // Interval between retries (0 = DefaultRetryInterval); first 3 attempts use exponential backoff
 	RetryableErrors []string                        // Error substrings that trigger retry (nil = defaults)
+	RetryAuthErrors bool                            // Also retry 401/Unauthorized/"Unable to process this request" — intended for Delete paths during concurrent destroys
 }
 
 var defaultRetryableErrors = []string{
@@ -153,6 +169,42 @@ var defaultRetryableErrors = []string{
 	"Please try again",
 	"in use",
 	"SecurityGroupInUse",
+}
+
+// authRetryableErrors are transient auth-shaped errors that can surface
+// during concurrent destroys. Opt-in via RetryOnConflictOpts.RetryAuthErrors
+// (Delete paths only — Create/Update must surface real auth errors
+// immediately so genuinely-bad credentials don't disappear into a retry).
+var authRetryableErrors = []string{
+	"401",
+	"Unauthorized",
+	"Unable to process this request",
+}
+
+// backoffInterval returns the wait duration before retry attempt n.
+//
+// Attempts 1-3 are quick probes scaled relative to the base interval
+// (base/15, base/5, ~base/2 ≈ 1s/3s/7s when base=15s) so we recover fast
+// from transient blips that clear in under a second. Attempts 4+ use the
+// configured base interval so we don't flood the platform if the issue
+// persists. With base=15s the full retry budget is roughly:
+//   attempt 1 (after 1s) + attempt 2 (after 3s) + attempt 3 (after 7s)
+//   + attempts 4-8 (after 15s each) ≈ 86s
+// well inside the 2-minute default deadline.
+func backoffInterval(attempt int, base time.Duration) time.Duration {
+	if attempt <= 0 {
+		return base
+	}
+	switch attempt {
+	case 1:
+		return base / 15
+	case 2:
+		return base / 5
+	case 3:
+		return base / 2
+	default:
+		return base
+	}
 }
 
 // PollForResourceOpts configures PollForResource.

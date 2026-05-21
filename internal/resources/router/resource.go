@@ -209,6 +209,10 @@ func (r *routerResource) Read(ctx context.Context, req resource.ReadRequest, res
 	path := fmt.Sprintf("%s/%s", apiPath, state.ID.ValueString())
 	apiResp, err := r.client.Get(ctx, path, nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read router", err.Error())
 		return
 	}
@@ -281,6 +285,7 @@ func (r *routerResource) Delete(ctx context.Context, req resource.DeleteRequest,
 			return err
 		},
 		RetryableErrors: []string{"in use", "already in use"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete router", err.Error())

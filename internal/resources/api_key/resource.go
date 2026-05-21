@@ -167,7 +167,7 @@ func (r *apiKeyResource) Read(ctx context.Context, req resource.ReadRequest, res
 	apiResp, err := r.client.Get(ctx, fmt.Sprintf("%s/%s", apiKeysBasePath, keyID), nil)
 	if err != nil {
 		// 404 → resource was deleted out of band.
-		if isNotFound(err) {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -260,7 +260,7 @@ func (r *apiKeyResource) Delete(ctx context.Context, req resource.DeleteRequest,
 	}
 
 	if _, err := r.client.Delete(ctx, fmt.Sprintf("%s/%s", apiKeysBasePath, keyID), nil); err != nil {
-		if isNotFound(err) {
+		if client.IsNotFound(err) {
 			// Already gone — treat as success.
 			return
 		}
@@ -294,11 +294,3 @@ func parseKeyResponse(data json.RawMessage) (*keyResponse, error) {
 	return &key, nil
 }
 
-// isNotFound reports whether err looks like a 404 from the the API.
-func isNotFound(err error) bool {
-	if err == nil {
-		return false
-	}
-	s := err.Error()
-	return strings.Contains(s, "404") || strings.Contains(strings.ToLower(s), "not found")
-}

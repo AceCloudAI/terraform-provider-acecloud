@@ -268,6 +268,10 @@ func (r *lbPoolMemberResource) Read(ctx context.Context, req resource.ReadReques
 	readPath := fmt.Sprintf("%s/%s/backend-servers/%s", apiBasePath, state.PoolID.ValueString(), state.ID.ValueString())
 	apiResp, err := r.client.Get(ctx, readPath, nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read pool member", err.Error())
 		return
 	}
@@ -344,6 +348,7 @@ func (r *lbPoolMemberResource) Delete(ctx context.Context, req resource.DeleteRe
 			_, err := r.client.Delete(ctx, deletePath, body)
 			return err
 		},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete pool member", err.Error())

@@ -291,6 +291,10 @@ func (r *vpcResource) Read(ctx context.Context, req resource.ReadRequest, resp *
 	path := fmt.Sprintf("%s/%s", vpcBasePath, state.ID.ValueString())
 	apiResp, err := r.client.Get(ctx, path, nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read VPC", err.Error())
 		return
 	}
@@ -397,6 +401,7 @@ func (r *vpcResource) Delete(ctx context.Context, req resource.DeleteRequest, re
 			return err
 		},
 		RetryableErrors: []string{"ports still in use"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete VPC", err.Error())

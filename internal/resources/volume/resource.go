@@ -179,6 +179,10 @@ func (r *volumeResource) Read(ctx context.Context, req resource.ReadRequest, res
 	path := fmt.Sprintf("%s/%s", volumeBasePath, state.ID.ValueString())
 	apiResp, err := r.client.Get(ctx, path, nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read volume", err.Error())
 		return
 	}
@@ -321,6 +325,7 @@ func (r *volumeResource) Delete(ctx context.Context, req resource.DeleteRequest,
 			return err
 		},
 		RetryableErrors: []string{"in use", "attached to an instance", "status must be available"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete volume", err.Error())

@@ -292,6 +292,10 @@ func (r *loadBalancerResource) Read(ctx context.Context, req resource.ReadReques
 	path := fmt.Sprintf("%s/%s", apiPath, state.ID.ValueString())
 	apiResp, err := r.client.Get(ctx, path, nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read load balancer", err.Error())
 		return
 	}
@@ -372,6 +376,7 @@ func (r *loadBalancerResource) Delete(ctx context.Context, req resource.DeleteRe
 			return err
 		},
 		RetryableErrors: []string{"associated resources", "Pending"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete load balancer", err.Error())

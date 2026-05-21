@@ -187,8 +187,10 @@ func (r *volumeBackupResource) Create(ctx context.Context, req resource.CreateRe
 	// Set ID immediately so we can track the resource even if wait fails
 	plan.ID = types.StringValue(created.ID)
 
-	// Wait for backup to become available (backups take ~2 min)
-	// Use direct /backups/{id} endpoint — the cloud wrapper returns {} while backup is creating
+	// Wait for backup to become available. Small unattached volumes finish
+	// in a couple of minutes; attached or large (>= 100 GB) volumes can take
+	// 10-20 minutes. The 30-minute ceiling covers the slowest cases seen in
+	// verification.
 	waitPath := fmt.Sprintf("/backups/%s", created.ID)
 	result, waitErr := wait.WaitForStatus(ctx, wait.WaitForStatusOpts{
 		Refresh: func(ctx context.Context) (*wait.StatusResult, error) {
@@ -210,7 +212,7 @@ func (r *volumeBackupResource) Create(ctx context.Context, req resource.CreateRe
 		},
 		TargetStatus: []string{"available"},
 		ErrorStatus:  []string{"error"},
-		Timeout:      5 * time.Minute,
+		Timeout:      30 * time.Minute,
 	})
 
 	if waitErr != nil {
@@ -240,8 +242,11 @@ func (r *volumeBackupResource) Read(ctx context.Context, req resource.ReadReques
 	readPath := fmt.Sprintf("/cloud/volume-backups/%s", state.ID.ValueString())
 	apiResp, err := r.client.Get(ctx, readPath, nil)
 	if err != nil {
-		// If 404, the resource no longer exists
-		resp.State.RemoveResource(ctx)
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
+		resp.Diagnostics.AddError("Failed to read volume backup", err.Error())
 		return
 	}
 
@@ -325,6 +330,7 @@ func (r *volumeBackupResource) Delete(ctx context.Context, req resource.DeleteRe
 			return err
 		},
 		RetryableErrors: []string{"status must be available", "Backup is already being created"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete volume backup", err.Error())

@@ -1,6 +1,5 @@
 ---
 page_title: "Web tier behind a load balancer"
-subcategory: "Load Balancer"
 description: |-
   Distribute traffic across two compute instances using a load balancer, listener, pool, members, and HTTP health monitor.
 ---

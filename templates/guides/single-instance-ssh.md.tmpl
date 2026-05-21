@@ -1,6 +1,5 @@
 ---
 page_title: "Single instance with SSH access"
-subcategory: "Compute"
 description: |-
   Launch a Linux instance with a public IP and SSH access, including the VPC, subnet, router, security group, and SSH key.
 ---

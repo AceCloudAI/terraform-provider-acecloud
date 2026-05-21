@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/AceCloudAI/terraform-provider-acecloud/internal/client"
@@ -126,7 +125,7 @@ func (r *volumeAttachmentResource) Read(ctx context.Context, req resource.ReadRe
 	vol, err := readVolume(ctx, r.client, state.VolumeID.ValueString())
 	if err != nil {
 		// Volume gone → attachment gone.
-		if isNotFound(err) {
+		if client.IsNotFound(err) {
 			resp.State.RemoveResource(ctx)
 			return
 		}
@@ -179,6 +178,7 @@ func (r *volumeAttachmentResource) Delete(ctx context.Context, req resource.Dele
 			return err
 		},
 		RetryableErrors: []string{"in use", "PENDING_", "is busy", "currently in use", "Please try again"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to detach volume", err.Error())
@@ -222,14 +222,6 @@ func readVolume(ctx context.Context, c *client.Client, volumeID string) (*volume
 		return nil, fmt.Errorf("parse volume response: %w", err)
 	}
 	return &v, nil
-}
-
-func isNotFound(err error) bool {
-	if err == nil {
-		return false
-	}
-	s := err.Error()
-	return strings.Contains(s, "404") || strings.Contains(strings.ToLower(s), "not found")
 }
 
 // buildID composes the Terraform resource ID from instance + volume.

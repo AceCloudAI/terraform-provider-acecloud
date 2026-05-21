@@ -238,6 +238,10 @@ func (r *securityGroupResource) Read(ctx context.Context, req resource.ReadReque
 	path := fmt.Sprintf("%s/%s", apiPath, state.ID.ValueString())
 	apiResp, err := r.client.Get(ctx, path, nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read security group", err.Error())
 		return
 	}
@@ -329,6 +333,7 @@ func (r *securityGroupResource) Delete(ctx context.Context, req resource.DeleteR
 			_, err := r.client.Delete(ctx, apiPath, body)
 			return err
 		},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete security group", err.Error())

@@ -132,6 +132,10 @@ func (r *routerInterfaceResource) Read(ctx context.Context, req resource.ReadReq
 	path := fmt.Sprintf("%s/%s", apiBasePath, state.RouterID.ValueString())
 	apiResp, err := r.client.Get(ctx, path, nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read router interfaces", err.Error())
 		return
 	}
@@ -223,6 +227,7 @@ func (r *routerInterfaceResource) Delete(ctx context.Context, req resource.Delet
 			return err
 		},
 		RetryableErrors: []string{"already in use", "Port is already in use"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete router interface", err.Error())

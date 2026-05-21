@@ -116,6 +116,10 @@ func (r *floatingIPResource) Read(ctx context.Context, req resource.ReadRequest,
 	// the API has no GET-by-ID for floating IPs. Use list endpoint and filter.
 	apiResp, err := r.client.Get(ctx, apiPath, nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read floating IP", err.Error())
 		return
 	}
@@ -200,6 +204,7 @@ func (r *floatingIPResource) Delete(ctx context.Context, req resource.DeleteRequ
 			return err
 		},
 		RetryableErrors: []string{"either attached", "already associated"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete floating IP", err.Error())

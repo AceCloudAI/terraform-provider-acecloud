@@ -357,6 +357,10 @@ func (r *autoScalingDeploymentResource) Read(ctx context.Context, req resource.R
 	path := fmt.Sprintf("%s/%s", basePath, state.ID.ValueString())
 	apiResp, err := r.client.Get(ctx, path, nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read auto scaling deployment", err.Error())
 		return
 	}

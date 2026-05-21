@@ -268,6 +268,10 @@ func (r *lbHealthMonitorResource) Read(ctx context.Context, req resource.ReadReq
 	path := fmt.Sprintf("%s/%s", apiPath, state.ID.ValueString())
 	apiResp, err := r.client.Get(ctx, path, nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read health monitor", err.Error())
 		return
 	}
@@ -342,6 +346,7 @@ func (r *lbHealthMonitorResource) Delete(ctx context.Context, req resource.Delet
 			_, err := r.client.Delete(ctx, apiPath, body)
 			return err
 		},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete health monitor", err.Error())

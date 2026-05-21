@@ -3,10 +3,12 @@ package key_pair
 import (
 	"context"
 
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/planmodifier"
 	"github.com/hashicorp/terraform-plugin-framework/resource/schema/stringplanmodifier"
+	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -38,8 +40,19 @@ func (r *keyPairResource) Schema(_ context.Context, _ resource.SchemaRequest, re
 				},
 			},
 			"public_key": schema.StringAttribute{
-				Description: "SSH public key. If not provided, a key pair will be generated and the private key returned on create.",
-				Optional:    true,
+				Description: "SSH public key in OpenSSH format (e.g. `ssh-rsa AAAA...` or `ssh-ed25519 AAAA...`). " +
+					"Must be at least 100 characters; shorter values are almost always the result of a copy-paste " +
+					"truncation or an HCL composition error, and the backend silently auto-generates a fresh keypair " +
+					"in that case which is rarely what the user intended. If omitted entirely, the provider will " +
+					"generate a keypair server-side and return the private key on create.",
+				Optional: true,
+				Validators: []validator.String{
+					// 100 chars is a conservative floor: a minimal valid OpenSSH
+					// public key (ssh-ed25519, no comment) is ~85 chars; ssh-rsa
+					// 2048-bit starts around 380 chars. 100 catches the common
+					// truncation / wrong-field-pasted cases at plan time.
+					stringvalidator.LengthAtLeast(100),
+				},
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
 				},

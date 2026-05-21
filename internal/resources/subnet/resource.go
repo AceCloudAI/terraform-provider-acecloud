@@ -184,6 +184,10 @@ func (r *subnetResource) Read(ctx context.Context, req resource.ReadRequest, res
 	path := fmt.Sprintf("%s/%s", apiPath, state.ID.ValueString())
 	apiResp, err := r.client.Get(ctx, path, nil)
 	if err != nil {
+		if client.IsNotFound(err) {
+			resp.State.RemoveResource(ctx)
+			return
+		}
 		resp.Diagnostics.AddError("Failed to read subnet", err.Error())
 		return
 	}
@@ -337,6 +341,7 @@ func (r *subnetResource) Delete(ctx context.Context, req resource.DeleteRequest,
 			return err
 		},
 		RetryableErrors: []string{"in use", "IP allocation", "ports have an IP"},
+		RetryAuthErrors: true,
 	})
 	if err != nil {
 		resp.Diagnostics.AddError("Failed to delete subnet", err.Error())
