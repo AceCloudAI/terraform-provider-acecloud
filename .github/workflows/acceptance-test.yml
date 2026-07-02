@@ -1,0 +1,612 @@
+name: Acceptance Tests
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      phases:
+        description: 'Comma-separated phases to run (1-8), or "all" for everything'
+        default: 'all'
+
+concurrency:
+  group: acceptance-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  TF_ACC: "1"
+  CGO_ENABLED: "0"
+  ACECLOUD_API_URL: ${{ secrets.ACECLOUD_API_URL }}
+  ACECLOUD_API_KEY_ID: ${{ secrets.ACECLOUD_API_KEY_ID }}
+  ACECLOUD_API_KEY_SECRET: ${{ secrets.ACECLOUD_API_KEY_SECRET }}
+  ACECLOUD_API_KEY_SERVICE_NAME: "terraform-ci"
+  ACECLOUD_REGION: ${{ secrets.ACECLOUD_REGION }}
+  ACECLOUD_PROJECT_ID: ${{ secrets.ACECLOUD_PROJECT_ID }}
+  ACECLOUD_FLAVOR_ID: ${{ secrets.ACECLOUD_FLAVOR_ID }}
+  ACECLOUD_IMAGE_ID: ${{ secrets.ACECLOUD_IMAGE_ID }}
+  ACECLOUD_EXTERNAL_NETWORK_ID: ${{ secrets.ACECLOUD_EXTERNAL_NETWORK_ID }}
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────
+  # Phase 1: Foundation — VPC, Subnet, Security Group, Key Pair
+  # Pure API calls, no long provisioning waits.
+  # ──────────────────────────────────────────────────────────────────
+  phase-1-foundation:
+    if: >-
+      github.event_name == 'pull_request' ||
+      contains(github.event.inputs.phases, '1') ||
+      github.event.inputs.phases == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: "Phase 1: Foundation (VPC, Subnet, SG, Key Pair)"
+        run: |
+          set +e
+          go test -v -json -timeout 12m -parallel=2 -count=1 \
+            ./internal/resources/vpc/ \
+            ./internal/resources/subnet/ \
+            ./internal/resources/security_group/ \
+            ./internal/resources/key_pair/ \
+            2>&1 | tee test-report.jsonl
+          echo "TEST_EXIT_CODE=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## Phase 1: Foundation" > test-summary.md
+          echo "" >> test-summary.md
+          PASSED=$(grep -c '"Action":"pass"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          FAILED=$(grep -c '"Action":"fail"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          SKIPPED=$(grep -c '"Action":"skip"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          echo "| Metric | Count |" >> test-summary.md
+          echo "|--------|-------|" >> test-summary.md
+          echo "| Passed | $PASSED |" >> test-summary.md
+          echo "| Failed | $FAILED |" >> test-summary.md
+          echo "| Skipped | $SKIPPED |" >> test-summary.md
+          echo "" >> test-summary.md
+          if [ "$FAILED" -gt 0 ] 2>/dev/null; then
+            echo "### Failed Tests" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="fail" and .Test != null) | "\(.Package)::\(.Test)"' test-report.jsonl 2>/dev/null >> test-summary.md
+            echo '```' >> test-summary.md
+            echo "" >> test-summary.md
+            echo "### Failure Output" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="output" and .Test != null) | .Output // empty' test-report.jsonl 2>/dev/null | grep -i -A2 "FAIL\|Error\|panic" | head -80 >> test-summary.md
+            echo '```' >> test-summary.md
+          fi
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-1-foundation-report
+          path: |
+            test-report.jsonl
+            test-summary.md
+          retention-days: 14
+      - name: Exit with test result
+        if: always()
+        run: exit ${TEST_EXIT_CODE:-1}
+
+  # ──────────────────────────────────────────────────────────────────
+  # Phase 2: Storage — Volume, Snapshot, Volume Backup
+  # Volume creation is fast; backup polling can take a few minutes.
+  # ──────────────────────────────────────────────────────────────────
+  phase-2-storage:
+    needs: phase-1-foundation
+    if: >-
+      github.event_name == 'pull_request' ||
+      contains(github.event.inputs.phases, '2') ||
+      github.event.inputs.phases == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: "Phase 2: Storage (Volume, Snapshot, Backup)"
+        run: |
+          set +e
+          go test -v -json -timeout 18m -parallel=2 -count=1 \
+            ./internal/resources/volume/ \
+            ./internal/resources/snapshot/ \
+            ./internal/resources/volume_backup/ \
+            2>&1 | tee test-report.jsonl
+          echo "TEST_EXIT_CODE=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## Phase 2: Storage" > test-summary.md
+          echo "" >> test-summary.md
+          PASSED=$(grep -c '"Action":"pass"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          FAILED=$(grep -c '"Action":"fail"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          SKIPPED=$(grep -c '"Action":"skip"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          echo "| Metric | Count |" >> test-summary.md
+          echo "|--------|-------|" >> test-summary.md
+          echo "| Passed | $PASSED |" >> test-summary.md
+          echo "| Failed | $FAILED |" >> test-summary.md
+          echo "| Skipped | $SKIPPED |" >> test-summary.md
+          echo "" >> test-summary.md
+          if [ "$FAILED" -gt 0 ] 2>/dev/null; then
+            echo "### Failed Tests" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="fail" and .Test != null) | "\(.Package)::\(.Test)"' test-report.jsonl 2>/dev/null >> test-summary.md
+            echo '```' >> test-summary.md
+            echo "" >> test-summary.md
+            echo "### Failure Output" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="output" and .Test != null) | .Output // empty' test-report.jsonl 2>/dev/null | grep -i -A2 "FAIL\|Error\|panic" | head -80 >> test-summary.md
+            echo '```' >> test-summary.md
+          fi
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-2-storage-report
+          path: |
+            test-report.jsonl
+            test-summary.md
+          retention-days: 14
+      - name: Exit with test result
+        if: always()
+        run: exit ${TEST_EXIT_CODE:-1}
+
+  # ──────────────────────────────────────────────────────────────────
+  # Phase 3: Compute — Instance, Volume Attachment
+  # Instance create polls 3 min, power-state 5 min, destroy 5 min.
+  # 4 tests sequential = ~20 min worst case.
+  # ──────────────────────────────────────────────────────────────────
+  phase-3-compute:
+    needs: phase-2-storage
+    if: >-
+      github.event_name == 'pull_request' ||
+      contains(github.event.inputs.phases, '3') ||
+      github.event.inputs.phases == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: "Phase 3: Compute (Instance, Volume Attachment)"
+        run: |
+          set +e
+          go test -v -json -timeout 22m -parallel=1 -count=1 \
+            ./internal/resources/instance/ \
+            ./internal/resources/volume_attachment/ \
+            2>&1 | tee test-report.jsonl
+          echo "TEST_EXIT_CODE=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## Phase 3: Compute" > test-summary.md
+          echo "" >> test-summary.md
+          PASSED=$(grep -c '"Action":"pass"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          FAILED=$(grep -c '"Action":"fail"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          SKIPPED=$(grep -c '"Action":"skip"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          echo "| Metric | Count |" >> test-summary.md
+          echo "|--------|-------|" >> test-summary.md
+          echo "| Passed | $PASSED |" >> test-summary.md
+          echo "| Failed | $FAILED |" >> test-summary.md
+          echo "| Skipped | $SKIPPED |" >> test-summary.md
+          echo "" >> test-summary.md
+          if [ "$FAILED" -gt 0 ] 2>/dev/null; then
+            echo "### Failed Tests" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="fail" and .Test != null) | "\(.Package)::\(.Test)"' test-report.jsonl 2>/dev/null >> test-summary.md
+            echo '```' >> test-summary.md
+            echo "" >> test-summary.md
+            echo "### Failure Output" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="output" and .Test != null) | .Output // empty' test-report.jsonl 2>/dev/null | grep -i -A2 "FAIL\|Error\|panic" | head -80 >> test-summary.md
+            echo '```' >> test-summary.md
+          fi
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-3-compute-report
+          path: |
+            test-report.jsonl
+            test-summary.md
+          retention-days: 14
+      - name: Exit with test result
+        if: always()
+        run: exit ${TEST_EXIT_CODE:-1}
+
+  # ──────────────────────────────────────────────────────────────────
+  # Phase 4: Networking — Router, Router Interface, Floating IP
+  # Neutron calls are fast. FIP Association needs an instance (~3 min).
+  # ──────────────────────────────────────────────────────────────────
+  phase-4-networking:
+    needs: phase-3-compute
+    if: >-
+      github.event_name == 'pull_request' ||
+      contains(github.event.inputs.phases, '4') ||
+      github.event.inputs.phases == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: "Phase 4: Networking (Router, Router Interface, Floating IP, FIP Association)"
+        run: |
+          set +e
+          go test -v -json -timeout 18m -parallel=1 -count=1 \
+            ./internal/resources/router/ \
+            ./internal/resources/router_interface/ \
+            ./internal/resources/floating_ip/ \
+            ./internal/resources/floating_ip_association/ \
+            2>&1 | tee test-report.jsonl
+          echo "TEST_EXIT_CODE=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## Phase 4: Networking" > test-summary.md
+          echo "" >> test-summary.md
+          PASSED=$(grep -c '"Action":"pass"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          FAILED=$(grep -c '"Action":"fail"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          SKIPPED=$(grep -c '"Action":"skip"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          echo "| Metric | Count |" >> test-summary.md
+          echo "|--------|-------|" >> test-summary.md
+          echo "| Passed | $PASSED |" >> test-summary.md
+          echo "| Failed | $FAILED |" >> test-summary.md
+          echo "| Skipped | $SKIPPED |" >> test-summary.md
+          echo "" >> test-summary.md
+          if [ "$FAILED" -gt 0 ] 2>/dev/null; then
+            echo "### Failed Tests" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="fail" and .Test != null) | "\(.Package)::\(.Test)"' test-report.jsonl 2>/dev/null >> test-summary.md
+            echo '```' >> test-summary.md
+            echo "" >> test-summary.md
+            echo "### Failure Output" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="output" and .Test != null) | .Output // empty' test-report.jsonl 2>/dev/null | grep -i -A2 "FAIL\|Error\|panic" | head -80 >> test-summary.md
+            echo '```' >> test-summary.md
+          fi
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-4-networking-report
+          path: |
+            test-report.jsonl
+            test-summary.md
+          retention-days: 14
+      - name: Exit with test result
+        if: always()
+        run: exit ${TEST_EXIT_CODE:-1}
+
+  # ──────────────────────────────────────────────────────────────────
+  # Phase 5: Load Balancing — LB, Listener, Pool, Member, Monitor
+  # LB pool polls up to 5 min. 5 sub-resources, sequential.
+  # ──────────────────────────────────────────────────────────────────
+  phase-5-load-balancing:
+    needs: phase-4-networking
+    if: >-
+      github.event_name == 'pull_request' ||
+      contains(github.event.inputs.phases, '5') ||
+      github.event.inputs.phases == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: "Phase 5: Load Balancing (LB, Listener, Pool, Member, Monitor)"
+        run: |
+          set +e
+          go test -v -json -timeout 22m -parallel=1 -count=1 \
+            ./internal/resources/load_balancer/ \
+            ./internal/resources/lb_listener/ \
+            ./internal/resources/lb_pool/ \
+            ./internal/resources/lb_pool_member/ \
+            ./internal/resources/lb_health_monitor/ \
+            2>&1 | tee test-report.jsonl
+          echo "TEST_EXIT_CODE=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## Phase 5: Load Balancing" > test-summary.md
+          echo "" >> test-summary.md
+          PASSED=$(grep -c '"Action":"pass"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          FAILED=$(grep -c '"Action":"fail"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          SKIPPED=$(grep -c '"Action":"skip"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          echo "| Metric | Count |" >> test-summary.md
+          echo "|--------|-------|" >> test-summary.md
+          echo "| Passed | $PASSED |" >> test-summary.md
+          echo "| Failed | $FAILED |" >> test-summary.md
+          echo "| Skipped | $SKIPPED |" >> test-summary.md
+          echo "" >> test-summary.md
+          if [ "$FAILED" -gt 0 ] 2>/dev/null; then
+            echo "### Failed Tests" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="fail" and .Test != null) | "\(.Package)::\(.Test)"' test-report.jsonl 2>/dev/null >> test-summary.md
+            echo '```' >> test-summary.md
+            echo "" >> test-summary.md
+            echo "### Failure Output" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="output" and .Test != null) | .Output // empty' test-report.jsonl 2>/dev/null | grep -i -A2 "FAIL\|Error\|panic" | head -80 >> test-summary.md
+            echo '```' >> test-summary.md
+          fi
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-5-load-balancing-report
+          path: |
+            test-report.jsonl
+            test-summary.md
+          retention-days: 14
+      - name: Exit with test result
+        if: always()
+        run: exit ${TEST_EXIT_CODE:-1}
+
+  # ──────────────────────────────────────────────────────────────────
+  # Phase 6: Auto-Scaling — Template, Deployment
+  # Deployment polls up to 10 min for ACTIVE (spawns instances).
+  # ──────────────────────────────────────────────────────────────────
+  phase-6-autoscaling:
+    needs: phase-5-load-balancing
+    if: >-
+      github.event_name == 'pull_request' ||
+      contains(github.event.inputs.phases, '6') ||
+      github.event.inputs.phases == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: "Phase 6: Auto-Scaling (Template, Deployment)"
+        run: |
+          set +e
+          go test -v -json -timeout 25m -parallel=1 -count=1 \
+            ./internal/resources/auto_scaling_template/ \
+            ./internal/resources/auto_scaling_deployment/ \
+            2>&1 | tee test-report.jsonl
+          echo "TEST_EXIT_CODE=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## Phase 6: Auto-Scaling" > test-summary.md
+          echo "" >> test-summary.md
+          PASSED=$(grep -c '"Action":"pass"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          FAILED=$(grep -c '"Action":"fail"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          SKIPPED=$(grep -c '"Action":"skip"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          echo "| Metric | Count |" >> test-summary.md
+          echo "|--------|-------|" >> test-summary.md
+          echo "| Passed | $PASSED |" >> test-summary.md
+          echo "| Failed | $FAILED |" >> test-summary.md
+          echo "| Skipped | $SKIPPED |" >> test-summary.md
+          echo "" >> test-summary.md
+          if [ "$FAILED" -gt 0 ] 2>/dev/null; then
+            echo "### Failed Tests" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="fail" and .Test != null) | "\(.Package)::\(.Test)"' test-report.jsonl 2>/dev/null >> test-summary.md
+            echo '```' >> test-summary.md
+            echo "" >> test-summary.md
+            echo "### Failure Output" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="output" and .Test != null) | .Output // empty' test-report.jsonl 2>/dev/null | grep -i -A2 "FAIL\|Error\|panic" | head -80 >> test-summary.md
+            echo '```' >> test-summary.md
+          fi
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-6-autoscaling-report
+          path: |
+            test-report.jsonl
+            test-summary.md
+          retention-days: 14
+      - name: Exit with test result
+        if: always()
+        run: exit ${TEST_EXIT_CODE:-1}
+
+  # ──────────────────────────────────────────────────────────────────
+  # Phase 7: IAM — API Key
+  # Pure API calls, no provisioning.
+  # ──────────────────────────────────────────────────────────────────
+  phase-7-iam:
+    needs: phase-6-autoscaling
+    if: >-
+      github.event_name == 'pull_request' ||
+      contains(github.event.inputs.phases, '7') ||
+      github.event.inputs.phases == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: "Phase 7: IAM (API Key)"
+        run: |
+          set +e
+          go test -v -json -timeout 8m -parallel=2 -count=1 \
+            ./internal/resources/api_key/ \
+            2>&1 | tee test-report.jsonl
+          echo "TEST_EXIT_CODE=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## Phase 7: IAM" > test-summary.md
+          echo "" >> test-summary.md
+          PASSED=$(grep -c '"Action":"pass"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          FAILED=$(grep -c '"Action":"fail"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          SKIPPED=$(grep -c '"Action":"skip"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          echo "| Metric | Count |" >> test-summary.md
+          echo "|--------|-------|" >> test-summary.md
+          echo "| Passed | $PASSED |" >> test-summary.md
+          echo "| Failed | $FAILED |" >> test-summary.md
+          echo "| Skipped | $SKIPPED |" >> test-summary.md
+          echo "" >> test-summary.md
+          if [ "$FAILED" -gt 0 ] 2>/dev/null; then
+            echo "### Failed Tests" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="fail" and .Test != null) | "\(.Package)::\(.Test)"' test-report.jsonl 2>/dev/null >> test-summary.md
+            echo '```' >> test-summary.md
+            echo "" >> test-summary.md
+            echo "### Failure Output" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="output" and .Test != null) | .Output // empty' test-report.jsonl 2>/dev/null | grep -i -A2 "FAIL\|Error\|panic" | head -80 >> test-summary.md
+            echo '```' >> test-summary.md
+          fi
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-7-iam-report
+          path: |
+            test-report.jsonl
+            test-summary.md
+          retention-days: 14
+      - name: Exit with test result
+        if: always()
+        run: exit ${TEST_EXIT_CODE:-1}
+
+  # ──────────────────────────────────────────────────────────────────
+  # Phase 8: Data Sources — read-only listing endpoints
+  # No resource creation, just API reads.
+  # ──────────────────────────────────────────────────────────────────
+  phase-8-datasources:
+    needs: phase-7-iam
+    if: >-
+      github.event_name == 'pull_request' ||
+      contains(github.event.inputs.phases, '8') ||
+      github.event.inputs.phases == 'all'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+      - name: "Phase 8: Data Sources (Flavors, Images, Routers, SGs, VPCs)"
+        run: |
+          set +e
+          go test -v -json -timeout 8m -parallel=4 -count=1 \
+            ./internal/datasources/... \
+            2>&1 | tee test-report.jsonl
+          echo "TEST_EXIT_CODE=${PIPESTATUS[0]}" >> "$GITHUB_ENV"
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## Phase 8: Data Sources" > test-summary.md
+          echo "" >> test-summary.md
+          PASSED=$(grep -c '"Action":"pass"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          FAILED=$(grep -c '"Action":"fail"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          SKIPPED=$(grep -c '"Action":"skip"' test-report.jsonl 2>/dev/null | grep -v ':' || echo 0)
+          echo "| Metric | Count |" >> test-summary.md
+          echo "|--------|-------|" >> test-summary.md
+          echo "| Passed | $PASSED |" >> test-summary.md
+          echo "| Failed | $FAILED |" >> test-summary.md
+          echo "| Skipped | $SKIPPED |" >> test-summary.md
+          echo "" >> test-summary.md
+          if [ "$FAILED" -gt 0 ] 2>/dev/null; then
+            echo "### Failed Tests" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="fail" and .Test != null) | "\(.Package)::\(.Test)"' test-report.jsonl 2>/dev/null >> test-summary.md
+            echo '```' >> test-summary.md
+            echo "" >> test-summary.md
+            echo "### Failure Output" >> test-summary.md
+            echo '```' >> test-summary.md
+            jq -r 'select(.Action=="output" and .Test != null) | .Output // empty' test-report.jsonl 2>/dev/null | grep -i -A2 "FAIL\|Error\|panic" | head -80 >> test-summary.md
+            echo '```' >> test-summary.md
+          fi
+      - name: Upload test artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase-8-datasources-report
+          path: |
+            test-report.jsonl
+            test-summary.md
+          retention-days: 14
+      - name: Exit with test result
+        if: always()
+        run: exit ${TEST_EXIT_CODE:-1}
+
+  # ──────────────────────────────────────────────────────────────────
+  # Summary — collects results from all phases into a PR comment
+  # ──────────────────────────────────────────────────────────────────
+  summary:
+    if: always() && github.event_name == 'pull_request'
+    needs:
+      - phase-1-foundation
+      - phase-2-storage
+      - phase-3-compute
+      - phase-4-networking
+      - phase-5-load-balancing
+      - phase-6-autoscaling
+      - phase-7-iam
+      - phase-8-datasources
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Post summary to PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const phases = [
+              { name: 'Phase 1: Foundation',      job: 'phase-1-foundation',     result: '${{ needs.phase-1-foundation.result }}' },
+              { name: 'Phase 2: Storage',          job: 'phase-2-storage',        result: '${{ needs.phase-2-storage.result }}' },
+              { name: 'Phase 3: Compute',          job: 'phase-3-compute',        result: '${{ needs.phase-3-compute.result }}' },
+              { name: 'Phase 4: Networking',       job: 'phase-4-networking',     result: '${{ needs.phase-4-networking.result }}' },
+              { name: 'Phase 5: Load Balancing',   job: 'phase-5-load-balancing', result: '${{ needs.phase-5-load-balancing.result }}' },
+              { name: 'Phase 6: Auto-Scaling',     job: 'phase-6-autoscaling',    result: '${{ needs.phase-6-autoscaling.result }}' },
+              { name: 'Phase 7: IAM',              job: 'phase-7-iam',            result: '${{ needs.phase-7-iam.result }}' },
+              { name: 'Phase 8: Data Sources',     job: 'phase-8-datasources',    result: '${{ needs.phase-8-datasources.result }}' },
+            ];
+
+            const icon = r => ({ success: '\u2705', failure: '\u274C', cancelled: '\u23ED\uFE0F', skipped: '\u23ED\uFE0F' }[r] || '\u2753');
+            const rows = phases.map(p => `| ${icon(p.result)} | ${p.name} | ${p.result} |`).join('\n');
+            const allPassed = phases.every(p => p.result === 'success' || p.result === 'skipped');
+
+            const body = [
+              `## ${allPassed ? '\u2705' : '\u274C'} Acceptance Test Results`,
+              '',
+              '| | Phase | Result |',
+              '|---|-------|--------|',
+              rows,
+              '',
+              `> Run: [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
+              '> Download per-phase reports from the **Artifacts** section of the run page.',
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes('Acceptance Test Results'));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
