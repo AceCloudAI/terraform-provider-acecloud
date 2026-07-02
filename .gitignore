@@ -19,6 +19,8 @@ vendor/
 .vscode/
 *.swp
 *.swo
+.cursor
+*.code-workspace
 
 # OS
 .DS_Store
@@ -27,6 +29,9 @@ Thumbs.db
 # Debug logs
 /tmp/
 acecloud_debug.log
+
+# Test reports
+test-reports/
 
 # Python
 __pycache__/
@@ -37,5 +42,8 @@ __pycache__/
 # Internal tests / scaffolding (not published to registry)
 tests/
 
-# Internal Go unit tests (not published to registry — kept for local CI only)
-*_test.go
+# Internal Go unit tests — tracked in git for CI but excluded from registry via .goreleaser.yml
+# *_test.go
+
+#local env
+.env.test
